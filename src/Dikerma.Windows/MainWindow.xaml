@@ -170,12 +170,17 @@
                                     <CheckBox x:Name="LayoutBoldCheckBox" Content="Bold" Margin="0,4,14,4" />
                                     <CheckBox x:Name="LayoutVisibleCheckBox" Content="Visible" Margin="0,4,14,4" />
                                 </WrapPanel>
-                                <TextBlock Text="Text color (HEX)"/><TextBox x:Name="LayoutTextColorTextBox"/>
+                                <TextBlock Text="Text color (HEX)"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBox x:Name="LayoutTextColorTextBox"/>
+                                    <Button Grid.Column="1" Content="Pick…" Margin="6,3,3,3" Click="PickTextColor_Click"/>
+                                </Grid>
 
                                 <Separator Margin="0,8" />
                                 <CheckBox x:Name="LayoutUnderlineCheckBox" Content="Underline" FontWeight="SemiBold" />
                                 <UniformGrid Columns="2">
-                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Underline color"/><TextBox x:Name="LayoutUnderlineColorTextBox"/></StackPanel>
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Underline color"/><DockPanel><Button Content="Pick…" DockPanel.Dock="Right" Margin="6,3,3,3" Click="PickUnderlineColor_Click"/><TextBox x:Name="LayoutUnderlineColorTextBox"/></DockPanel></StackPanel>
                                     <StackPanel Margin="6,0,0,0"><TextBlock Text="Thickness pt"/><TextBox x:Name="LayoutUnderlineThicknessTextBox"/></StackPanel>
                                     <StackPanel Margin="0,0,6,0"><TextBlock Text="Offset mm"/><TextBox x:Name="LayoutUnderlineOffsetTextBox"/></StackPanel>
                                     <StackPanel Margin="6,0,0,0"><TextBlock Text="Width mode"/><ComboBox x:Name="LayoutUnderlineModeComboBox"/></StackPanel>
@@ -184,14 +189,14 @@
                                 <Separator Margin="0,8" />
                                 <CheckBox x:Name="LayoutOutlineCheckBox" Content="Text outline" FontWeight="SemiBold" />
                                 <UniformGrid Columns="2">
-                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Outline color"/><TextBox x:Name="LayoutOutlineColorTextBox"/></StackPanel>
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Outline color"/><DockPanel><Button Content="Pick…" DockPanel.Dock="Right" Margin="6,3,3,3" Click="PickOutlineColor_Click"/><TextBox x:Name="LayoutOutlineColorTextBox"/></DockPanel></StackPanel>
                                     <StackPanel Margin="6,0,0,0"><TextBlock Text="Thickness pt"/><TextBox x:Name="LayoutOutlineThicknessTextBox"/></StackPanel>
                                 </UniformGrid>
 
                                 <Separator Margin="0,8" />
                                 <CheckBox x:Name="LayoutShadowCheckBox" Content="Text shadow" FontWeight="SemiBold" />
                                 <UniformGrid Columns="2">
-                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Shadow color"/><TextBox x:Name="LayoutShadowColorTextBox"/></StackPanel>
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Shadow color"/><DockPanel><Button Content="Pick…" DockPanel.Dock="Right" Margin="6,3,3,3" Click="PickShadowColor_Click"/><TextBox x:Name="LayoutShadowColorTextBox"/></DockPanel></StackPanel>
                                     <StackPanel Margin="6,0,0,0"><TextBlock Text="Opacity 0–1"/><TextBox x:Name="LayoutShadowOpacityTextBox"/></StackPanel>
                                     <StackPanel Margin="0,0,6,0"><TextBlock Text="X offset mm"/><TextBox x:Name="LayoutShadowXTextBox"/></StackPanel>
                                     <StackPanel Margin="6,0,0,0"><TextBlock Text="Y offset mm"/><TextBox x:Name="LayoutShadowYTextBox"/></StackPanel>
