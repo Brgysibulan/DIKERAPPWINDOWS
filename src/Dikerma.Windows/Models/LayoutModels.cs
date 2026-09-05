@@ -1,12 +1,23 @@
 namespace Dikerma.Windows.Models;
 
 public enum IdLayoutSide { Front, Back }
-public enum IdLayoutKind { Text, Image }
+public enum IdLayoutKind { Text, Image, HorizontalLine, VerticalLine, Rectangle, Ellipse }
 public enum IdTextAlignment { Left, Center, Right }
 public enum IdUnderlineWidthMode { Text, Element }
 
 public sealed class ElementPlacement
 {
+    public string? BindingKey { get; set; }
+    public string? TextOverride { get; set; }
+    public string? ImagePath { get; set; }
+    public string? GroupId { get; set; }
+    public int ZIndex { get; set; }
+    public bool Italic { get; set; }
+    public double CropLeft { get; set; }
+    public double CropTop { get; set; }
+    public double CropRight { get; set; }
+    public double CropBottom { get; set; }
+    public double StrokeWidthPt { get; set; } = 1;
     public double XMm { get; set; }
     public double YMm { get; set; }
     public double WidthMm { get; set; }
@@ -36,10 +47,15 @@ public sealed class ElementPlacement
 
     public void Clamp()
     {
-        WidthMm = Math.Clamp(WidthMm, 4, LayoutCatalog.CardWidthMm);
-        HeightMm = Math.Clamp(HeightMm, 2, LayoutCatalog.CardHeightMm);
+        WidthMm = Math.Clamp(WidthMm, 0.3, LayoutCatalog.CardWidthMm);
+        HeightMm = Math.Clamp(HeightMm, 0.3, LayoutCatalog.CardHeightMm);
         XMm = Math.Clamp(XMm, 0, Math.Max(0, LayoutCatalog.CardWidthMm - WidthMm));
         YMm = Math.Clamp(YMm, 0, Math.Max(0, LayoutCatalog.CardHeightMm - HeightMm));
+        CropLeft = Math.Clamp(CropLeft, 0, 0.95);
+        CropRight = Math.Clamp(CropRight, 0, 0.95 - CropLeft);
+        CropTop = Math.Clamp(CropTop, 0, 0.95);
+        CropBottom = Math.Clamp(CropBottom, 0, 0.95 - CropTop);
+        StrokeWidthPt = Math.Clamp(StrokeWidthPt, 0.2, 12);
         FontSizePt = Math.Clamp(FontSizePt, 3.5, 36);
         UnderlineThicknessPt = Math.Clamp(UnderlineThicknessPt, 0.15, 2);
         UnderlineOffsetMm = Math.Clamp(UnderlineOffsetMm, 0, 3);
@@ -68,7 +84,11 @@ public sealed record LayoutElementDefinition(
 
 public sealed class LayoutProfile
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
+    public List<LayoutElementDefinition> CustomElements { get; set; } = new();
+    public IEnumerable<LayoutElementDefinition> ForSide(IdLayoutSide side) =>
+        LayoutCatalog.ForSide(side).Concat(CustomElements.Where(e => e.Side == side)).OrderBy(e => Get(e.Key).ZIndex);
+    public LayoutElementDefinition? Find(string key) => LayoutCatalog.Find(key) ?? CustomElements.FirstOrDefault(e => e.Key == key);
     public bool Locked { get; set; }
     public double GridSizeMm { get; set; } = 1;
     public bool SnapToGrid { get; set; } = true;
@@ -78,7 +98,7 @@ public sealed class LayoutProfile
     {
         if (!Elements.TryGetValue(key, out var placement))
         {
-            var definition = LayoutCatalog.Find(key) ?? throw new InvalidOperationException($"Unknown layout element: {key}");
+            var definition = Find(key) ?? throw new InvalidOperationException($"Unknown layout element: {key}");
             placement = LayoutCatalog.DefaultPlacement(definition);
             Elements[key] = placement;
         }

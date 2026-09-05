@@ -35,10 +35,15 @@ public sealed class JsonStore
             }
             profile.Elements[definition.Key].Clamp();
         }
+        foreach (var definition in profile.CustomElements) profile.Get(definition.Key).Clamp();
         return profile;
     }
 
-    public void SaveLayout(LayoutProfile layout) => Save(AppPaths.LayoutFile, layout);
+    public void SaveLayout(LayoutProfile layout)
+    {
+        layout.SchemaVersion = 2;
+        Save(AppPaths.LayoutFile, layout);
+    }
 
     private T Load<T>(string path, T fallback)
     {

@@ -1,7 +1,7 @@
 <Window x:Class="Dikerma.Windows.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="DIKERMA – Barangay ID Maker" Width="1400" Height="860"
+        Icon="Assets/AppIcon.ico" Title="DIKERMA – Barangay ID Maker" Width="1400" Height="860"
         MinWidth="1100" MinHeight="700" WindowStartupLocation="CenterScreen"
         Background="{StaticResource Surface}">
     <Grid>
@@ -18,6 +18,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel>
+                    <Border Width="54" Height="54" Background="#00854A" CornerRadius="12" HorizontalAlignment="Left" Margin="0,0,0,12"><TextBlock Text="D" Foreground="White" FontSize="38" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                     <TextBlock Text="DIKERMA" Foreground="White" FontSize="26" FontWeight="Bold" />
                     <TextBlock Text="Barangay ID Maker" Foreground="#D9EFE2" FontSize="13" Margin="0,2,0,22" />
                     <Button Content="Records" HorizontalContentAlignment="Left" Click="NavigateRecords_Click" />
@@ -25,7 +26,7 @@
                     <Button Content="Layout Studio" HorizontalContentAlignment="Left" Click="NavigateLayout_Click" />
                     <Button Content="Settings" HorizontalContentAlignment="Left" Click="NavigateSettings_Click" />
                 </StackPanel>
-                <TextBlock Grid.Row="2" x:Name="StatusText" Text="Offline • Windows v0.1.0" Foreground="#D9EFE2" TextWrapping="Wrap" FontSize="12" />
+                <TextBlock Grid.Row="2" x:Name="StatusText" Text="Offline • Windows v0.2.0" Foreground="#D9EFE2" TextWrapping="Wrap" FontSize="12" />
             </Grid>
         </Border>
 
@@ -133,28 +134,48 @@
                         <ColumnDefinition Width="390" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <Grid Grid.ColumnSpan="2" Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="280"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <WrapPanel Grid.ColumnSpan="2" Margin="0,0,0,12">
                         <TextBlock Text="Side" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <ComboBox Grid.Column="1" x:Name="LayoutSideComboBox" SelectionChanged="LayoutSideComboBox_SelectionChanged" />
-                        <TextBlock Grid.Column="2" Text="Element" VerticalAlignment="Center" Margin="16,0,8,0" />
-                        <ComboBox Grid.Column="3" x:Name="LayoutElementComboBox" DisplayMemberPath="DisplayName" SelectionChanged="LayoutElementComboBox_SelectionChanged" />
-                        <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <CheckBox x:Name="SnapToGridCheckBox" Content="Snap" VerticalAlignment="Center" Checked="SnapSettingsChanged" Unchecked="SnapSettingsChanged" />
-                            <ComboBox x:Name="GridSizeComboBox" Width="75" Margin="8,3" SelectionChanged="SnapSettingsChanged"><ComboBoxItem Content="0.5"/><ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="5"/></ComboBox>
-                            <CheckBox x:Name="LayoutLockedCheckBox" Content="Lock layout" VerticalAlignment="Center" Margin="8,0" Checked="LayoutLockChanged" Unchecked="LayoutLockChanged" />
-                        </StackPanel>
-                    </Grid>
+                        <ComboBox Width="100" x:Name="LayoutSideComboBox" SelectionChanged="LayoutSideComboBox_SelectionChanged" />
+                        <TextBlock Text="Element" VerticalAlignment="Center" Margin="12,0,8,0" />
+                        <ComboBox Width="230" x:Name="LayoutElementComboBox" DisplayMemberPath="DisplayName" SelectionChanged="LayoutElementComboBox_SelectionChanged" />
+                        <CheckBox x:Name="SnapToGridCheckBox" Content="Snap" Margin="12,0,0,0" VerticalAlignment="Center" Checked="SnapSettingsChanged" Unchecked="SnapSettingsChanged" />
+                        <ComboBox x:Name="GridSizeComboBox" Width="65" Margin="8,3" SelectionChanged="SnapSettingsChanged"><ComboBoxItem Content="0.5"/><ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="5"/></ComboBox>
+                        <CheckBox x:Name="LayoutLockedCheckBox" Content="Lock layout" VerticalAlignment="Center" Margin="8,0" Checked="LayoutLockChanged" Unchecked="LayoutLockChanged" />
+                    </WrapPanel>
 
                     <Border Grid.Row="1" Grid.Column="0" Background="#E9EEE9" CornerRadius="8" Padding="12" Margin="0,0,14,0">
-                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
-                            <Canvas x:Name="LayoutCanvas" Width="425" Height="575" Background="White" ClipToBounds="True" />
-                        </Viewbox>
+                        <DockPanel>
+                            <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <Button Content="−" Click="ZoomOut_Click"/><TextBlock x:Name="ZoomLabel" Text="100%" VerticalAlignment="Center"/>
+                                <Button Content="+" Click="ZoomIn_Click"/><Button Content="Fit" Click="ZoomFit_Click"/><Button Content="800%" Click="ZoomMax_Click"/>
+                                <Button Content="Undo" Click="Undo_Click"/><Button Content="Redo" Click="Redo_Click"/><Button Content="Shortcuts" Click="Shortcuts_Click"/>
+                            </WrapPanel>
+                            <TextBlock DockPanel.Dock="Bottom" Text="Shift-click: multi-select • Drag bottom-right corner: resize" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            <ScrollViewer x:Name="StudioScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" PreviewMouseWheel="StudioWheel">
+                                <Canvas x:Name="LayoutCanvas" Width="425" Height="575" Background="White" ClipToBounds="True" Focusable="True" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                            </ScrollViewer>
+                        </DockPanel>
                     </Border>
 
                     <Border Grid.Row="1" Grid.Column="1" Background="White" CornerRadius="8" Padding="14" BorderBrush="#DCE5DF" BorderThickness="1">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel>
+                                <TextBlock Text="Add elements" FontSize="18" FontWeight="SemiBold"/>
+                                <WrapPanel>
+                                    <Button Content="Text" Tag="Text" Click="AddElement_Click"/><Button Content="Image / PNG" Tag="Image" Click="AddElement_Click"/>
+                                    <Button Content="Rectangle" Tag="Rectangle" Click="AddElement_Click"/><Button Content="Ellipse" Tag="Ellipse" Click="AddElement_Click"/>
+                                    <Button Content="Horizontal line" Tag="HorizontalLine" Click="AddElement_Click"/><Button Content="Vertical line" Tag="VerticalLine" Click="AddElement_Click"/>
+                                </WrapPanel>
+                                <WrapPanel>
+                                    <Button Content="Group" Click="Group_Click"/><Button Content="Ungroup" Click="Ungroup_Click"/>
+                                    <Button Content="Duplicate" Click="Duplicate_Click"/><Button Content="Delete / hide" Click="DeleteElement_Click"/>
+                                    <Button Content="Bring to front" Tag="front" Click="LayerOrder_Click"/><Button Content="Send to back" Tag="back" Click="LayerOrder_Click"/>
+                                </WrapPanel>
+                                <Button Content="Crop / clean selected image…" Click="Crop_Click"/>
+                                <TextBlock Text="Text override (blank = record / default text)" TextWrapping="Wrap"/>
+                                <TextBox x:Name="LayoutTextOverride" AcceptsReturn="True" Height="60" TextWrapping="Wrap"/>
+                                <TextBlock Text="Line thickness (pt)"/><TextBox x:Name="LayoutStrokeTextBox"/>
                                 <TextBlock Text="Selected element" FontSize="18" FontWeight="SemiBold" />
                                 <TextBlock x:Name="SelectedElementText" Foreground="#5B6C63" Margin="0,0,0,10" />
                                 <UniformGrid Columns="2">
@@ -165,12 +186,14 @@
                                 </UniformGrid>
                                 <TextBlock Text="Font size (pt)"/><TextBox x:Name="LayoutFontSizeTextBox"/>
                                 <TextBlock Text="Font family"/><ComboBox x:Name="LayoutFontFamilyComboBox"><ComboBoxItem Tag="sans" Content="Sans Serif"/><ComboBoxItem Tag="serif" Content="Serif"/><ComboBoxItem Tag="monospace" Content="Monospace"/></ComboBox>
+                                <Button Content="Upload font (.ttf / .otf)…" Click="ImportFont_Click"/>
                                 <TextBlock Text="Alignment"/><ComboBox x:Name="LayoutAlignmentComboBox" />
                                 <WrapPanel>
+                                    <CheckBox x:Name="LayoutItalicCheckBox" Content="Italic" Margin="0,4,14,4"/>
                                     <CheckBox x:Name="LayoutBoldCheckBox" Content="Bold" Margin="0,4,14,4" />
                                     <CheckBox x:Name="LayoutVisibleCheckBox" Content="Visible" Margin="0,4,14,4" />
                                 </WrapPanel>
-                                <TextBlock Text="Text color (HEX)"/>
+                                <TextBlock Text="Text / shape / line color (HEX)"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBox x:Name="LayoutTextColorTextBox"/>
@@ -194,7 +217,7 @@
                                 </UniformGrid>
 
                                 <Separator Margin="0,8" />
-                                <CheckBox x:Name="LayoutShadowCheckBox" Content="Text shadow" FontWeight="SemiBold" />
+                                <CheckBox x:Name="LayoutShadowCheckBox" Content="Element shadow" FontWeight="SemiBold" />
                                 <UniformGrid Columns="2">
                                     <StackPanel Margin="0,0,6,0"><TextBlock Text="Shadow color"/><DockPanel><Button Content="Pick…" DockPanel.Dock="Right" Margin="6,3,3,3" Click="PickShadowColor_Click"/><TextBox x:Name="LayoutShadowColorTextBox"/></DockPanel></StackPanel>
                                     <StackPanel Margin="6,0,0,0"><TextBlock Text="Opacity 0–1"/><TextBox x:Name="LayoutShadowOpacityTextBox"/></StackPanel>
@@ -202,6 +225,7 @@
                                     <StackPanel Margin="6,0,0,0"><TextBlock Text="Y offset mm"/><TextBox x:Name="LayoutShadowYTextBox"/></StackPanel>
                                 </UniformGrid>
 
+                                <TextBlock Text="Shadow blur (pt)"/><TextBox x:Name="LayoutShadowBlurTextBox"/>
                                 <Button Content="Apply selected settings" Background="{StaticResource BrandGreen}" Foreground="White" Click="ApplyLayoutProperties_Click" />
                                 <TextBlock Text="Nudge" FontWeight="SemiBold" Margin="0,8,0,2" />
                                 <UniformGrid Columns="4">
@@ -225,7 +249,7 @@
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <StackPanel>
                         <TextBlock Text="Settings" FontSize="26" FontWeight="Bold" Foreground="#193527" />
-                        <TextBlock Text="Uploaded front/back artwork is the actual ID design. The app only places dynamic data on top." Foreground="#5B6C63" />
+                        <TextBlock Text="Uploaded front/back artwork is the actual ID design. Add editable text, shapes, lines and images in Layout Studio." Foreground="#5B6C63" />
                     </StackPanel>
                     <ScrollViewer Grid.Row="1" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
                         <StackPanel MaxWidth="820" HorizontalAlignment="Left">
