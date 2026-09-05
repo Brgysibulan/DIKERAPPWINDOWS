@@ -12,21 +12,23 @@
     <RootNamespace>Dikerma.Windows</RootNamespace>
     <Product>DIKERMA Barangay ID Maker</Product>
     <Title>DIKERMA Barangay ID Maker</Title>
-    <Description>Offline Windows Barangay ID Maker</Description>
+    <Description>Offline Windows Barangay ID Maker with advanced Layout Studio</Description>
     <Company>JOSHUAPUDI</Company>
     <Authors>JOSHUAPUDI</Authors>
     <Copyright>Copyright © JOSHUAPUDI 2026</Copyright>
 
-    <Version>0.1.1</Version>
-    <AssemblyVersion>0.1.1.0</AssemblyVersion>
-    <FileVersion>0.1.1.0</FileVersion>
-    <InformationalVersion>0.1.1</InformationalVersion>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>0.2.0</InformationalVersion>
 
     <ApplicationIcon>Assets\dikerma.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="Assets\dikerma.ico" />
+    <Resource Include="Assets\AppIcon.ico" />
     <PackageReference Include="PDFsharp-wpf" Version="6.2.4" />
   </ItemGroup>
 </Project>

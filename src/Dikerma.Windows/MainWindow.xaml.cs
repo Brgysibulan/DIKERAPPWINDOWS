@@ -52,6 +52,7 @@ public partial class MainWindow : Window
         SnapToGridCheckBox.IsChecked = _layout.SnapToGrid;
         LayoutLockedCheckBox.IsChecked = _layout.Locked;
 
+        InitializeStudio();
         LoadSettingsIntoUi();
         RefreshGenerationPickers();
         RefreshLayoutElementList();
@@ -235,6 +236,7 @@ public partial class MainWindow : Window
     private void LayoutSideComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!IsLoaded && LayoutElementComboBox is null) return;
+        _selection.Clear();
         RefreshLayoutElementList();
         RefreshLayoutPreview();
     }
@@ -242,7 +244,7 @@ public partial class MainWindow : Window
     private void RefreshLayoutElementList()
     {
         if (LayoutElementComboBox is null) return;
-        var items = LayoutCatalog.ForSide(CurrentSide).ToList();
+        var items = _layout.ForSide(CurrentSide).ToList();
         LayoutElementComboBox.ItemsSource = items;
         if (items.Count > 0) LayoutElementComboBox.SelectedIndex = 0;
     }
@@ -250,6 +252,7 @@ public partial class MainWindow : Window
     private void LayoutElementComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _selectedLayoutElement = LayoutElementComboBox.SelectedItem as LayoutElementDefinition;
+        if (_selectedLayoutElement is not null && !_selection.Contains(_selectedLayoutElement.Key)) SelectCanvasElement(_selectedLayoutElement.Key, false);
         LoadLayoutProperties();
         RefreshLayoutPreview();
     }
@@ -261,7 +264,8 @@ public partial class MainWindow : Window
         DrawPreviewBackground();
         DrawGuides();
 
-        foreach (var definition in LayoutCatalog.ForSide(CurrentSide))
+        var layerOrder = 10;
+        foreach (var definition in _layout.ForSide(CurrentSide))
         {
             var placement = _layout.Get(definition.Key);
             if (!placement.Visible && definition.Key != _selectedLayoutElement?.Key) continue;
@@ -269,7 +273,7 @@ public partial class MainWindow : Window
             LayoutCanvas.Children.Add(wrapper);
             Canvas.SetLeft(wrapper, placement.XMm * CanvasScale);
             Canvas.SetTop(wrapper, placement.YMm * CanvasScale);
-            Panel.SetZIndex(wrapper, definition.Key == _selectedLayoutElement?.Key ? 20 : 10);
+            Panel.SetZIndex(wrapper, layerOrder++);
         }
     }
 
@@ -335,62 +339,26 @@ public partial class MainWindow : Window
 
     private FrameworkElement CreateElementVisual(LayoutElementDefinition definition, ElementPlacement p)
     {
-        FrameworkElement child;
-        if (definition.Kind == IdLayoutKind.Image)
-        {
-            var path = ResolvePreviewImage(definition.Key);
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-            {
-                try { child = new WpfImage { Source = OfflineImageProcessor.LoadPreview(path), Stretch = Stretch.Fill }; }
-                catch { child = Placeholder(definition.DisplayName); }
-            }
-            else child = Placeholder(definition.DisplayName);
-        }
-        else
-        {
-            var tb = new TextBlock
-            {
-                Text = ResolvePreviewText(definition),
-                Foreground = BrushFromHex(p.TextColor),
-                FontFamily = new FontFamily(MapPreviewFont(p.FontFamilyKey)),
-                FontSize = p.FontSizePt * (25.4 / 72.0) * CanvasScale,
-                FontWeight = p.Bold ? FontWeights.Bold : FontWeights.Normal,
-                TextAlignment = p.Alignment switch { IdTextAlignment.Center => TextAlignment.Center, IdTextAlignment.Right => TextAlignment.Right, _ => TextAlignment.Left },
-                TextWrapping = TextWrapping.Wrap,
-                ClipToBounds = true,
-                Opacity = p.Visible ? 1 : 0.35
-            };
-            if (p.UnderlineEnabled) tb.TextDecorations = TextDecorations.Underline;
-            if (p.ShadowEnabled)
-            {
-                tb.Effect = new DropShadowEffect
-                {
-                    Color = MediaColorFromHex(p.ShadowColor),
-                    Opacity = p.ShadowOpacity,
-                    ShadowDepth = Math.Sqrt(p.ShadowDxMm * p.ShadowDxMm + p.ShadowDyMm * p.ShadowDyMm) * CanvasScale,
-                    BlurRadius = Math.Max(0.1, p.ShadowRadiusPt)
-                };
-            }
-            else if (p.TextOutlineEnabled)
-            {
-                tb.Effect = new DropShadowEffect { Color = MediaColorFromHex(p.TextOutlineColor), Opacity = 1, ShadowDepth = 0, BlurRadius = Math.Max(1, p.TextOutlineWidthPt * 2) };
-            }
-            child = tb;
-        }
+        FrameworkElement child = new Viewbox { Stretch = Stretch.Fill,
+            Child = ElementRenderer.Create(definition, p, ResolvePreviewText(definition), p.ImagePath ?? ResolvePreviewImage(p.BindingKey ?? definition.Key)) };
 
-        var selected = definition.Key == _selectedLayoutElement?.Key;
-        var wrapper = new Border
+        var selected = _selection.Contains(definition.Key) || definition.Key == _selectedLayoutElement?.Key;
+        var wrapper = new Grid
         {
             Width = p.WidthMm * CanvasScale,
             Height = p.HeightMm * CanvasScale,
-            BorderBrush = selected ? Brushes.Gold : Brushes.Transparent,
-            BorderThickness = selected ? new Thickness(1.5) : new Thickness(0.5),
             Background = Brushes.Transparent,
-            Child = child,
             Tag = definition.Key,
             Cursor = _layout.Locked ? Cursors.Arrow : Cursors.SizeAll,
             ToolTip = definition.DisplayName
         };
+        wrapper.Children.Add(child);
+        wrapper.Opacity = p.Visible ? 1 : 0.3;
+        if (selected)
+        {
+            wrapper.Children.Add(new Border { BorderBrush = Brushes.Gold, BorderThickness = new Thickness(1.5), IsHitTestVisible = false });
+            wrapper.Children.Add(new Rectangle { Width = 9, Height = 9, Fill = Brushes.Gold, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false });
+        }
         wrapper.MouseLeftButtonDown += LayoutVisual_MouseLeftButtonDown;
         wrapper.MouseMove += LayoutVisual_MouseMove;
         wrapper.MouseLeftButtonUp += LayoutVisual_MouseLeftButtonUp;
@@ -408,9 +376,12 @@ public partial class MainWindow : Window
     private void LayoutVisual_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement visual || visual.Tag is not string key) return;
-        var definition = LayoutCatalog.Find(key);
+        var definition = _layout.Find(key);
         if (definition is null) return;
-        LayoutElementComboBox.SelectedItem = LayoutCatalog.ForSide(CurrentSide).FirstOrDefault(x => x.Key == key);
+        var local = e.GetPosition(visual);
+        var resizing = local.X >= visual.ActualWidth - 12 && local.Y >= visual.ActualHeight - 12;
+        SelectCanvasElement(key, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+        LayoutElementComboBox.SelectedItem = _layout.ForSide(CurrentSide).FirstOrDefault(x => x.Key == key);
         _selectedLayoutElement = definition;
         LoadLayoutProperties();
         RefreshLayoutPreview();
@@ -418,10 +389,14 @@ public partial class MainWindow : Window
 
         _dragVisual = LayoutCanvas.Children.OfType<FrameworkElement>().FirstOrDefault(x => Equals(x.Tag, key));
         if (_dragVisual is null) return;
+        Remember();
+        _dragStarts = SelectedPlacements().ToDictionary(x => x.Key, x => x.Value.Clone());
         _dragStartPoint = e.GetPosition(LayoutCanvas);
+        _resizing = resizing;
         var p = _layout.Get(key);
         _dragStartXmm = p.XMm;
         _dragStartYmm = p.YMm;
+        Keyboard.Focus(LayoutCanvas);
         _dragVisual.CaptureMouse();
         e.Handled = true;
     }
@@ -430,13 +405,15 @@ public partial class MainWindow : Window
     {
         if (_dragVisual is null || _selectedLayoutElement is null || e.LeftButton != MouseButtonState.Pressed || _layout.Locked) return;
         var point = e.GetPosition(LayoutCanvas);
-        var p = _layout.Get(_selectedLayoutElement.Key);
-        p.XMm = _dragStartXmm + (point.X - _dragStartPoint.X) / CanvasScale;
-        p.YMm = _dragStartYmm + (point.Y - _dragStartPoint.Y) / CanvasScale;
-        ApplySnap(p);
-        p.Clamp();
-        Canvas.SetLeft(_dragVisual, p.XMm * CanvasScale);
-        Canvas.SetTop(_dragVisual, p.YMm * CanvasScale);
+        var dx = (point.X - _dragStartPoint.X) / CanvasScale;
+        var dy = (point.Y - _dragStartPoint.Y) / CanvasScale;
+        TransformSelection(dx, dy, _resizing);
+        foreach (var visual in LayoutCanvas.Children.OfType<FrameworkElement>().Where(v => v.Tag is string k && _dragStarts.ContainsKey(k)))
+        {
+            var p = _layout.Get((string)visual.Tag);
+            Canvas.SetLeft(visual, p.XMm * CanvasScale); Canvas.SetTop(visual, p.YMm * CanvasScale);
+            visual.Width = p.WidthMm * CanvasScale; visual.Height = p.HeightMm * CanvasScale;
+        }
         LoadLayoutProperties();
     }
 
@@ -445,6 +422,7 @@ public partial class MainWindow : Window
         if (_dragVisual is null) return;
         _dragVisual.ReleaseMouseCapture();
         _dragVisual = null;
+        RefreshLayoutPreview();
         e.Handled = true;
     }
 
@@ -452,6 +430,10 @@ public partial class MainWindow : Window
     {
         if (_selectedLayoutElement is null || LayoutXTextBox is null) return;
         var p = _layout.Get(_selectedLayoutElement.Key);
+        LayoutTextOverride.Text = p.TextOverride ?? "";
+        LayoutItalicCheckBox.IsChecked = p.Italic;
+        LayoutStrokeTextBox.Text = F(p.StrokeWidthPt);
+        LayoutShadowBlurTextBox.Text = F(p.ShadowRadiusPt);
         SelectedElementText.Text = _selectedLayoutElement.DisplayName;
         LayoutXTextBox.Text = F(p.XMm); LayoutYTextBox.Text = F(p.YMm);
         LayoutWidthTextBox.Text = F(p.WidthMm); LayoutHeightTextBox.Text = F(p.HeightMm);
@@ -480,6 +462,11 @@ public partial class MainWindow : Window
         if (_selectedLayoutElement is null) return;
         if (_layout.Locked) { MessageBox.Show("Layout is locked. Turn off Lock layout first.", "DIKERMA", MessageBoxButton.OK, MessageBoxImage.Information); return; }
         var p = _layout.Get(_selectedLayoutElement.Key);
+        Remember();
+        p.TextOverride = string.IsNullOrEmpty(LayoutTextOverride.Text) ? null : LayoutTextOverride.Text;
+        p.Italic = LayoutItalicCheckBox.IsChecked == true;
+        p.StrokeWidthPt = Read(LayoutStrokeTextBox, p.StrokeWidthPt);
+        p.ShadowRadiusPt = Read(LayoutShadowBlurTextBox, p.ShadowRadiusPt);
         p.XMm = Read(LayoutXTextBox, p.XMm); p.YMm = Read(LayoutYTextBox, p.YMm);
         p.WidthMm = Read(LayoutWidthTextBox, p.WidthMm); p.HeightMm = Read(LayoutHeightTextBox, p.HeightMm);
         p.FontSizePt = Read(LayoutFontSizeTextBox, p.FontSizePt);
@@ -529,25 +516,30 @@ public partial class MainWindow : Window
     private void Nudge(double dx, double dy)
     {
         if (_selectedLayoutElement is null || _layout.Locked) return;
-        var p = _layout.Get(_selectedLayoutElement.Key); p.XMm += dx; p.YMm += dy; p.Clamp();
+        Remember();
+        _dragStarts = SelectedPlacements().ToDictionary(x => x.Key, x => x.Value.Clone());
+        TransformSelection(dx, dy, false);
         LoadLayoutProperties(); RefreshLayoutPreview();
     }
 
     private void CenterX_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLayoutElement is null || _layout.Locked) return;
+        Remember();
         var p = _layout.Get(_selectedLayoutElement.Key); p.XMm = (LayoutCatalog.CardWidthMm - p.WidthMm) / 2; p.Clamp(); LoadLayoutProperties(); RefreshLayoutPreview();
     }
 
     private void CenterY_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLayoutElement is null || _layout.Locked) return;
+        Remember();
         var p = _layout.Get(_selectedLayoutElement.Key); p.YMm = (LayoutCatalog.CardHeightMm - p.HeightMm) / 2; p.Clamp(); LoadLayoutProperties(); RefreshLayoutPreview();
     }
 
     private void ResetSelected_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLayoutElement is null || _layout.Locked) return;
+        Remember();
         _layout.Elements[_selectedLayoutElement.Key] = LayoutCatalog.DefaultPlacement(_selectedLayoutElement);
         LoadLayoutProperties(); RefreshLayoutPreview();
     }
@@ -555,7 +547,8 @@ public partial class MainWindow : Window
     private void ResetSide_Click(object sender, RoutedEventArgs e)
     {
         if (_layout.Locked) return;
-        foreach (var def in LayoutCatalog.ForSide(CurrentSide)) _layout.Elements[def.Key] = LayoutCatalog.DefaultPlacement(def);
+        Remember();
+        foreach (var def in _layout.ForSide(CurrentSide)) _layout.Elements[def.Key] = LayoutCatalog.DefaultPlacement(def);
         LoadLayoutProperties(); RefreshLayoutPreview();
     }
 
@@ -638,6 +631,7 @@ public partial class MainWindow : Window
 
     private string ResolvePreviewText(LayoutElementDefinition definition)
     {
+        if (_layout.Get(definition.Key).BindingKey is string bindingKey) definition = definition with { Key = bindingKey };
         var employee = _employees.FirstOrDefault();
         if (employee is null) return definition.SampleText;
         return definition.Key switch
@@ -693,11 +687,12 @@ public partial class MainWindow : Window
         return text.Skip(1).All(Uri.IsHexDigit) ? text.ToUpperInvariant() : fallback;
     }
 
-    private static string MapPreviewFont(string key) => key switch { "serif" => "Times New Roman", "monospace" => "Consolas", _ => "Segoe UI" };
+    private static string MapPreviewFont(string key) => key switch { "serif" => "Times New Roman", "monospace" => "Consolas", "sans" => "Arial", _ => key };
     private void SelectFontFamily(string key)
     {
         foreach (var item in LayoutFontFamilyComboBox.Items.OfType<ComboBoxItem>()) if (Equals(item.Tag?.ToString(), key)) { LayoutFontFamilyComboBox.SelectedItem = item; return; }
-        LayoutFontFamilyComboBox.SelectedIndex = 0;
+        var extra = new ComboBoxItem { Tag = key, Content = key };
+        LayoutFontFamilyComboBox.Items.Add(extra); LayoutFontFamilyComboBox.SelectedItem = extra;
     }
     private string SelectedFontFamily() => (LayoutFontFamilyComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "sans";
 
@@ -714,9 +709,9 @@ public partial class MainWindow : Window
     }
     private string GetSelectedStatus() => (RecordStatusComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Active";
 
-    private static double Read(TextBox box, double fallback) => double.TryParse(box.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : fallback;
+    private static double Read(TextBox box, double fallback) => double.TryParse(box.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) ? value : fallback;
     private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string? NullIfBlank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
-    private void SetStatus(string text) => StatusText.Text = $"{text}\nOffline • Windows v0.1.0";
+    private void SetStatus(string text) => StatusText.Text = $"{text}\nOffline • Windows v0.2.0";
     private void ShowError(Exception ex) { SetStatus("Operation failed"); MessageBox.Show(ex.Message, "DIKERMA", MessageBoxButton.OK, MessageBoxImage.Error); }
 }
