@@ -48,14 +48,10 @@ public sealed class PdfExportService
         var w = Mm(LayoutCatalog.CardWidthMm);
         var h = Mm(LayoutCatalog.CardHeightMm);
 
-        var background = side == IdLayoutSide.Front ? settings.FrontBackgroundPath : settings.BackBackgroundPath;
-        if (!TryDrawImage(gfx, background, x, y, w, h))
+        gfx.DrawRectangle(XBrushes.White, x, y, w, h);
+        foreach (var definition in layout.ForSide(side))
         {
-            DrawFallbackBackground(gfx, x, y, w, h, side);
-        }
-
-        foreach (var definition in LayoutCatalog.ForSide(side))
-        {
+            var custom = layout.CustomElements.FirstOrDefault(item => item.Key == definition.Key);
             var placement = layout.Get(definition.Key);
             if (!placement.Visible) continue;
 
@@ -66,38 +62,21 @@ public sealed class PdfExportService
 
             if (definition.Kind == IdLayoutKind.Image)
             {
-                var imagePath = ResolveImage(definition.Key, employee, settings);
-                TryDrawImage(gfx, imagePath, ex, ey, ew, eh);
+                var imagePath = ResolveElementImage(definition, employee, settings, layout);
+                var drawn = TryDrawImage(gfx, imagePath, ex, ey, ew, eh);
+                var sourceKey = custom?.SourceKey ?? definition.Key;
+                if (!drawn && sourceKey.EndsWith("_background", StringComparison.Ordinal))
+                    DrawFallbackBackground(gfx, ex, ey, ew, eh, sourceKey == "front_background" ? IdLayoutSide.Front : IdLayoutSide.Back);
             }
-            else
+            else if (definition.Kind == IdLayoutKind.Text)
             {
-                var text = ResolveText(definition.Key, definition.SampleText, employee, settings);
+                var text = ResolveElementText(definition, employee, settings, layout);
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     DrawStyledText(gfx, text, ex, ey, ew, eh, placement);
                 }
             }
-        }
-
-
-        foreach (var custom in layout.CustomElements.Where(item => item.Side == side).OrderBy(item => item.ZIndex))
-        {
-            var placement = layout.Get(custom.Key);
-            if (!placement.Visible) continue;
-            var ex = x + Mm(placement.XMm);
-            var ey = y + Mm(placement.YMm);
-            var ew = Mm(placement.WidthMm);
-            var eh = Mm(placement.HeightMm);
-
-            if (custom.Kind == IdLayoutKind.Image)
-            {
-                TryDrawImage(gfx, custom.ImagePath, ex, ey, ew, eh);
-            }
-            else if (custom.Kind == IdLayoutKind.Text)
-            {
-                DrawStyledText(gfx, custom.Content, ex, ey, ew, eh, placement);
-            }
-            else
+            else if (custom is not null)
             {
                 var fill = new XSolidBrush(ParseColor(custom.FillColor, custom.Opacity));
                 var pen = new XPen(ParseColor(custom.BorderColor, custom.Opacity), Math.Max(0.1, custom.BorderWidthPt));
@@ -121,11 +100,12 @@ public sealed class PdfExportService
         var green = new XSolidBrush(XColor.FromArgb(0, 82, 45));
         if (side == IdLayoutSide.Front)
         {
-            gfx.DrawRectangle(green, x, y, w, Mm(25));
+            gfx.DrawRectangle(green, x, y, w, h * 25 / LayoutCatalog.CardHeightMm);
         }
         else
         {
-            gfx.DrawRectangle(green, x, y + h - Mm(13), w, Mm(13));
+            var band = h * 13 / LayoutCatalog.CardHeightMm;
+            gfx.DrawRectangle(green, x, y + h - band, w, band);
         }
     }
 
@@ -135,13 +115,13 @@ public sealed class PdfExportService
 
         if (side == IdLayoutSide.Front)
         {
-            if (settings.PhotoOutlineEnabled)
+            if (settings.PhotoOutlineEnabled && layout.IsVisible("front_photo"))
                 DrawPlacementRectangle(gfx, pen, x, y, layout.Get("front_photo"));
 
-            if (settings.QrOutlineEnabled)
+            if (settings.QrOutlineEnabled && layout.IsVisible("front_qr"))
                 DrawPlacementRectangle(gfx, pen, x, y, layout.Get("front_qr"));
 
-            if (settings.SignatureLineEnabled)
+            if (settings.SignatureLineEnabled && layout.IsVisible("front_signature"))
             {
                 var p = layout.Get("front_signature");
                 var yy = y + Mm(p.YMm + p.HeightMm);
@@ -152,6 +132,7 @@ public sealed class PdfExportService
             {
                 foreach (var key in new[] { "front_name_value", "front_designation_value", "front_employee_no_value" })
                 {
+                    if (!layout.IsVisible(key)) continue;
                     var p = layout.Get(key);
                     var yy = y + Mm(p.YMm + p.HeightMm);
                     gfx.DrawLine(pen, x + Mm(p.XMm), yy, x + Mm(p.XMm + p.WidthMm), yy);
@@ -162,8 +143,8 @@ public sealed class PdfExportService
         {
             var address = layout.Get("back_address_value");
             var notice = layout.Get("back_notice_heading");
-            gfx.DrawLine(pen, x + Mm(7), y + Mm(address.YMm + address.HeightMm + 1), x + Mm(78), y + Mm(address.YMm + address.HeightMm + 1));
-            gfx.DrawLine(pen, x + Mm(7), y + Mm(notice.YMm - 1), x + Mm(78), y + Mm(notice.YMm - 1));
+            if (layout.IsVisible("back_address_value")) gfx.DrawLine(pen, x + Mm(7), y + Mm(address.YMm + address.HeightMm + 1), x + Mm(78), y + Mm(address.YMm + address.HeightMm + 1));
+            if (layout.IsVisible("back_notice_heading")) gfx.DrawLine(pen, x + Mm(7), y + Mm(notice.YMm - 1), x + Mm(78), y + Mm(notice.YMm - 1));
         }
     }
 
@@ -289,26 +270,47 @@ public sealed class PdfExportService
         }
     }
 
-    private static string? ResolveImage(string key, EmployeeRecord employee, AppSettingsModel settings) => key switch
+    public static string? ResolveElementImage(LayoutElementDefinition definition, EmployeeRecord? employee, AppSettingsModel settings, LayoutProfile layout)
     {
+        var p = layout.Get(definition.Key);
+        if (p.ImageOverride is not null) return p.ImageOverride;
+        var custom = layout.CustomElements.FirstOrDefault(x => x.Key == definition.Key);
+        return custom is not null && custom.SourceKey is null ? custom.ImagePath : ResolveImage(custom?.SourceKey ?? definition.Key, employee, settings);
+    }
+
+    public static string ResolveElementText(LayoutElementDefinition definition, EmployeeRecord? employee, AppSettingsModel settings, LayoutProfile layout)
+    {
+        var p = layout.Get(definition.Key);
+        if (p.TextOverride is not null) return p.TextOverride;
+        var custom = layout.CustomElements.FirstOrDefault(x => x.Key == definition.Key);
+        if (custom is not null && custom.SourceKey is null) return custom.Content;
+        var sourceKey = custom?.SourceKey ?? definition.Key;
+        var fallback = LayoutCatalog.Find(sourceKey)?.SampleText ?? definition.SampleText;
+        return ResolveText(sourceKey, fallback, employee, settings);
+    }
+
+    private static string? ResolveImage(string key, EmployeeRecord? employee, AppSettingsModel settings) => key switch
+    {
+        "front_background" => settings.FrontBackgroundPath,
+        "back_background" => settings.BackBackgroundPath,
         "front_logo_1" => settings.Logo1Path,
         "front_logo_2" => settings.Logo2Path,
-        "front_photo" => employee.PhotoPath,
-        "front_signature" => employee.SignaturePath,
-        "front_qr" => employee.QrImagePath,
+        "front_photo" => employee?.PhotoPath,
+        "front_signature" => employee?.SignaturePath,
+        "front_qr" => employee?.QrImagePath,
         "back_captain_signature" => settings.CaptainSignaturePath,
         _ => null
     };
 
-    private static string ResolveText(string key, string fallback, EmployeeRecord employee, AppSettingsModel settings) => key switch
+    private static string ResolveText(string key, string fallback, EmployeeRecord? employee, AppSettingsModel settings) => key switch
     {
-        "front_name_value" => employee.FullName,
-        "front_designation_value" => employee.Position,
-        "front_employee_no_value" => employee.ControlNumber,
-        "back_dob_value" => FormatDate(employee.Birthdate),
-        "back_sex_value" => employee.Sex,
-        "back_civil_value" => employee.CivilStatus,
-        "back_address_value" => employee.Address,
+        "front_name_value" => employee?.FullName ?? fallback,
+        "front_designation_value" => employee?.Position ?? fallback,
+        "front_employee_no_value" => employee?.ControlNumber ?? fallback,
+        "back_dob_value" => employee is null ? fallback : FormatDate(employee.Birthdate),
+        "back_sex_value" => employee?.Sex ?? fallback,
+        "back_civil_value" => employee?.CivilStatus ?? fallback,
+        "back_address_value" => employee?.Address ?? fallback,
         "back_issuer_value" => settings.IssuerName,
         "back_captain_name" => settings.CaptainName,
         "back_captain_title" => settings.CaptainTitle,

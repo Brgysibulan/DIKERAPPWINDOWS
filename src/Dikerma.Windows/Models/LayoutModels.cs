@@ -7,6 +7,11 @@ public enum IdUnderlineWidthMode { Text, Element }
 
 public sealed class ElementPlacement
 {
+    // Null means use the original record/settings value. Empty text is intentional.
+    public string? TextOverride { get; set; }
+    public string? ImageOverride { get; set; }
+    public bool Deleted { get; set; }
+    public int? ZIndex { get; set; }
     public double XMm { get; set; }
     public double YMm { get; set; }
     public double WidthMm { get; set; }
@@ -68,12 +73,21 @@ public sealed record LayoutElementDefinition(
 
 public sealed class LayoutProfile
 {
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 3;
     public bool Locked { get; set; }
     public double GridSizeMm { get; set; } = 1;
     public bool SnapToGrid { get; set; } = true;
     public Dictionary<string, ElementPlacement> Elements { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<CustomLayoutElement> CustomElements { get; set; } = new();
+
+    public IEnumerable<LayoutElementDefinition> ForSide(IdLayoutSide side) =>
+        LayoutCatalog.ForSide(side).Concat(CustomElements.Where(x => x.Side == side).Select(x => x.ToDefinition()))
+            .Where(x => !Get(x.Key).Deleted).OrderBy(x => Layer(x.Key));
+
+    public int Layer(string key) => Get(key).ZIndex ?? CustomElements.FirstOrDefault(x => x.Key == key)?.ZIndex
+        ?? (key.EndsWith("_background", StringComparison.Ordinal) ? -100 : 10);
+
+    public bool IsVisible(string key) => !Get(key).Deleted && Get(key).Visible;
 
     public ElementPlacement Get(string key)
     {
@@ -91,6 +105,8 @@ public sealed class LayoutProfile
 
 public sealed class CustomLayoutElement
 {
+    // Duplicated data fields keep their source binding for batch ID generation.
+    public string? SourceKey { get; set; }
     public string Key { get; set; } = $"custom_{Guid.NewGuid():N}";
     public IdLayoutSide Side { get; set; }
     public string Name { get; set; } = "New element";

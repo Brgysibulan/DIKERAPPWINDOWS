@@ -53,3 +53,26 @@ For physical-size validation, print PDFs at **Actual Size / 100%**. Do not use *
 ## Repository separation
 
 This Windows repository is independent from `Brgysibulan/dikerma`. Windows development here does not modify the Android stable baseline.
+# Editor correction — Windows v0.1.1
+
+Built-in and custom elements now share text editing, image replacement, duplication,
+deletion, restore and layer ordering. Double-click text (or press F2) to edit;
+double-click an image to replace it. Click and drag to move; use the gold bottom-right
+handle to resize. `Delete`, `Ctrl+D`, `Ctrl+Z`, `Ctrl+Y` and arrow keys operate on the
+selected element outside text inputs. Use the top **Save layout** button to persist.
+
+Deleted elements stay removed after restart and PDF export. **Restore field** restores
+an individual deleted element, including the background; Undo/Redo is session-only.
+Deleting a template element never deletes an employee record or an imported file.
+Duplicated employee fields retain their per-person binding. A text/image override
+is template-wide; **Use original content / record value** reconnects the source.
+For individual employee information, edit the employee in Records.
+
+Uploaded PNG/JPG artwork remains one image: text baked into it cannot be edited as
+separate letters. Add native text/shapes/images for individually editable design parts.
+The fixed 85 × 115 mm ID size, A4 front/back pairing and cut-guide settings are retained.
+Legacy layouts receive editable background elements without discarding placements.
+
+Windows CI runs `tests/Dikerma.EditorChecks` to check deletion persistence, overrides,
+record bindings, layer ordering and a two-person PDF export. Mouse interaction and
+physical printing still require a Windows smoke test with the built artifact.

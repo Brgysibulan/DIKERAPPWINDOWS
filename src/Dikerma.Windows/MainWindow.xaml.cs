@@ -236,7 +236,7 @@ public partial class MainWindow : Window
 
     private IdLayoutSide CurrentSide => LayoutSideComboBox.SelectedItem is IdLayoutSide side ? side : IdLayoutSide.Front;
     private IEnumerable<LayoutElementDefinition> CurrentDefinitions() =>
-        LayoutCatalog.ForSide(CurrentSide).Concat(_layout.CustomElements.Where(x => x.Side == CurrentSide).OrderBy(x => x.ZIndex).Select(x => x.ToDefinition()));
+        _layout.ForSide(CurrentSide);
     private LayoutElementDefinition? FindDefinition(string key) => LayoutCatalog.Find(key) ?? _layout.CustomElements.FirstOrDefault(x => x.Key == key)?.ToDefinition();
     private CustomLayoutElement? SelectedCustom => _selectedLayoutElement is null ? null : _layout.CustomElements.FirstOrDefault(x => x.Key == _selectedLayoutElement.Key);
 
@@ -251,8 +251,9 @@ public partial class MainWindow : Window
     {
         if (LayoutElementComboBox is null) return;
         var items = CurrentDefinitions().ToList();
+        var selectedKey = _selectedLayoutElement?.Key;
         LayoutElementComboBox.ItemsSource = items;
-        if (items.Count > 0) LayoutElementComboBox.SelectedIndex = 0;
+        LayoutElementComboBox.SelectedItem = items.FirstOrDefault(x => x.Key == selectedKey) ?? items.FirstOrDefault();
     }
 
     private void LayoutElementComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -266,7 +267,6 @@ public partial class MainWindow : Window
     {
         if (LayoutCanvas is null) return;
         LayoutCanvas.Children.Clear();
-        DrawPreviewBackground();
         DrawGuides();
 
         foreach (var definition in CurrentDefinitions())
@@ -277,41 +277,10 @@ public partial class MainWindow : Window
             LayoutCanvas.Children.Add(wrapper);
             Canvas.SetLeft(wrapper, placement.XMm * CanvasScale);
             Canvas.SetTop(wrapper, placement.YMm * CanvasScale);
-            Panel.SetZIndex(wrapper, SelectedZIndex(definition.Key) + (definition.Key == _selectedLayoutElement?.Key ? 1000 : 0));
+            Panel.SetZIndex(wrapper, SelectedZIndex(definition.Key));
         }
     }
 
-    private void DrawPreviewBackground()
-    {
-        var path = CurrentSide == IdLayoutSide.Front ? _settings.FrontBackgroundPath : _settings.BackBackgroundPath;
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-        {
-            try
-            {
-                var image = new WpfImage
-                {
-                    Source = OfflineImageProcessor.LoadPreview(path), Width = LayoutCanvas.Width, Height = LayoutCanvas.Height,
-                    Stretch = Stretch.Fill, IsHitTestVisible = false
-                };
-                LayoutCanvas.Children.Add(image);
-                Panel.SetZIndex(image, 0);
-                return;
-            }
-            catch { }
-        }
-
-        var fallback = new Border { Width = LayoutCanvas.Width, Height = LayoutCanvas.Height, Background = Brushes.White, IsHitTestVisible = false };
-        LayoutCanvas.Children.Add(fallback);
-        var bar = new Rectangle
-        {
-            Width = LayoutCanvas.Width,
-            Height = (CurrentSide == IdLayoutSide.Front ? 25 : 13) * CanvasScale,
-            Fill = BrushFromHex("#00522D"),
-            IsHitTestVisible = false
-        };
-        LayoutCanvas.Children.Add(bar);
-        Canvas.SetTop(bar, CurrentSide == IdLayoutSide.Front ? 0 : LayoutCanvas.Height - bar.Height);
-    }
 
     private void DrawGuides()
     {
@@ -356,11 +325,20 @@ public partial class MainWindow : Window
         }
         else if (definition.Kind == IdLayoutKind.Image)
         {
-            var path = custom?.ImagePath ?? ResolvePreviewImage(definition.Key);
+            var path = PdfExportService.ResolveElementImage(definition, _employees.FirstOrDefault(), _settings, _layout);
             if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
             {
                 try { child = new WpfImage { Source = OfflineImageProcessor.LoadPreview(path), Stretch = Stretch.Fill }; }
                 catch { child = Placeholder(definition.DisplayName); }
+            }
+            else if ((custom?.SourceKey ?? definition.Key).EndsWith("_background", StringComparison.Ordinal))
+            {
+                var background = new Grid { Background = Brushes.White };
+                var front = (custom?.SourceKey ?? definition.Key) == "front_background";
+                background.Children.Add(new Rectangle { Fill = BrushFromHex("#00522D"),
+                    Height = p.HeightMm * CanvasScale * (front ? 25 : 13) / LayoutCatalog.CardHeightMm,
+                    VerticalAlignment = front ? VerticalAlignment.Top : VerticalAlignment.Bottom });
+                child = background;
             }
             else child = Placeholder(definition.DisplayName);
         }
@@ -368,7 +346,7 @@ public partial class MainWindow : Window
         {
             var tb = new TextBlock
             {
-                Text = custom?.Content ?? ResolvePreviewText(definition),
+                Text = ResolvePreviewText(definition),
                 Foreground = BrushFromHex(p.TextColor),
                 FontFamily = new FontFamily(MapPreviewFont(p.FontFamilyKey)),
                 FontSize = p.FontSizePt * (25.4 / 72.0) * CanvasScale,
@@ -419,6 +397,7 @@ public partial class MainWindow : Window
         wrapper.MouseLeftButtonDown += LayoutVisual_MouseLeftButtonDown;
         wrapper.MouseMove += LayoutVisual_MouseMove;
         wrapper.MouseLeftButtonUp += LayoutVisual_MouseLeftButtonUp;
+        wrapper.ContextMenu = CreateElementMenu(definition.Key);
         return wrapper;
     }
 
@@ -435,11 +414,20 @@ public partial class MainWindow : Window
         if (sender is not FrameworkElement visual || visual.Tag is not string key) return;
         var definition = FindDefinition(key);
         if (definition is null) return;
-        LayoutElementComboBox.SelectedItem = CurrentDefinitions().FirstOrDefault(x => x.Key == key);
+        LayoutElementComboBox.SelectedItem = LayoutElementComboBox.Items.Cast<LayoutElementDefinition>().FirstOrDefault(x => x.Key == key);
         _selectedLayoutElement = definition;
         LoadLayoutProperties();
         RefreshLayoutPreview();
         if (_layout.Locked) return;
+
+        LayoutCanvas.Focus();
+        if (e.ClickCount == 2)
+        {
+            EditSelectedContent();
+            e.Handled = true;
+            return;
+        }
+        RememberLayout();
 
         _dragVisual = LayoutCanvas.Children.OfType<FrameworkElement>().FirstOrDefault(x => Equals(x.Tag, key));
         if (_dragVisual is null) return;
@@ -473,11 +461,12 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private int SelectedZIndex(string key) => _layout.CustomElements.FirstOrDefault(x => x.Key == key)?.ZIndex ?? 10;
+    private int SelectedZIndex(string key) => _layout.Layer(key);
 
     private void ResizeThumb_DragStarted(object sender, DragStartedEventArgs e)
     {
         if (sender is not Thumb { Tag: string key } || _layout.Locked) return;
+        RememberLayout();
         _resizingKey = key;
         var p = _layout.Get(key);
         _resizeStartWidthMm = p.WidthMm;
@@ -516,6 +505,7 @@ public partial class MainWindow : Window
 
     private void AddImageElement_Click(object sender, RoutedEventArgs e)
     {
+        if (_layout.Locked) { SetStatus("Unlock the layout first"); return; }
         var source = ChooseImage();
         if (source is null) return;
         try
@@ -529,6 +519,7 @@ public partial class MainWindow : Window
     private void AddCustomElement(IdLayoutKind kind, string name, string content, string? imagePath = null)
     {
         if (_layout.Locked) { MessageBox.Show("Unlock the layout before adding elements.", "DIKERMA"); return; }
+        RememberLayout();
         var custom = new CustomLayoutElement { Side = CurrentSide, Kind = kind, Name = name, Content = content, ImagePath = imagePath, ZIndex = (_layout.CustomElements.Count == 0 ? 100 : _layout.CustomElements.Max(x => x.ZIndex) + 1) };
         _layout.CustomElements.Add(custom);
         var definition = custom.ToDefinition();
@@ -542,11 +533,16 @@ public partial class MainWindow : Window
 
     private void DuplicateElement_Click(object sender, RoutedEventArgs e)
     {
+        if (_selectedLayoutElement is null || !CanEditLayout()) return;
+        RememberLayout();
+        var definition = _selectedLayoutElement;
         var source = SelectedCustom;
-        if (source is null || _layout.Locked) return;
-        var copy = new CustomLayoutElement { Side = source.Side, Kind = source.Kind, Name = source.Name + " copy", Content = source.Content, ImagePath = source.ImagePath, FillColor = source.FillColor, BorderColor = source.BorderColor, BorderWidthPt = source.BorderWidthPt, Opacity = source.Opacity, ZIndex = source.ZIndex + 1 };
+        var copy = source is null
+            ? new CustomLayoutElement { Side = definition.Side, Kind = definition.Kind, Name = definition.DisplayName + " copy", SourceKey = definition.Key, Content = definition.SampleText }
+            : new CustomLayoutElement { Side = source.Side, Kind = source.Kind, Name = source.Name + " copy", SourceKey = source.SourceKey, Content = source.Content, ImagePath = source.ImagePath, FillColor = source.FillColor, BorderColor = source.BorderColor, BorderWidthPt = source.BorderWidthPt, Opacity = source.Opacity };
         _layout.CustomElements.Add(copy);
-        var p = _layout.Get(source.Key).Clone(); p.XMm += 2; p.YMm += 2; p.Clamp();
+        var p = _layout.Get(definition.Key).Clone(); p.XMm += 2; p.YMm += 2; p.Clamp();
+        p.ZIndex = CurrentDefinitions().Max(x => _layout.Layer(x.Key)) + 1;
         _layout.Elements[copy.Key] = p;
         _selectedLayoutElement = copy.ToDefinition();
         RefreshLayoutElementList();
@@ -556,25 +552,35 @@ public partial class MainWindow : Window
 
     private void DeleteElement_Click(object sender, RoutedEventArgs e)
     {
-        var custom = SelectedCustom;
-        if (custom is null || _layout.Locked) return;
-        if (MessageBox.Show($"Delete {custom.Name}?", "DIKERMA", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        _layout.CustomElements.Remove(custom); _layout.Elements.Remove(custom.Key); _selectedLayoutElement = null;
+        if (_selectedLayoutElement is null || !CanEditLayout()) return;
+        RememberLayout();
+        _layout.Get(_selectedLayoutElement.Key).Deleted = true;
+        _selectedLayoutElement = null;
         RefreshLayoutElementList(); RefreshLayoutPreview();
+        SetStatus("Element removed from template only • Undo or Restore field to recover • Save layout to keep");
     }
 
-    private void BringForward_Click(object sender, RoutedEventArgs e) { if (SelectedCustom is { } c) { c.ZIndex++; RefreshLayoutPreview(); } }
-    private void SendBackward_Click(object sender, RoutedEventArgs e) { if (SelectedCustom is { } c) { c.ZIndex--; RefreshLayoutPreview(); } }
+    private void BringForward_Click(object sender, RoutedEventArgs e) => MoveElementLayer(true);
+    private void SendBackward_Click(object sender, RoutedEventArgs e) => MoveElementLayer(false);
     private void PickShapeFill_Click(object sender, RoutedEventArgs e) => PickColor(ShapeFillTextBox);
     private void PickShapeBorder_Click(object sender, RoutedEventArgs e) => PickColor(ShapeBorderTextBox);
 
     private void LoadLayoutProperties()
     {
-        if (_selectedLayoutElement is null || LayoutXTextBox is null) return;
+        if (LayoutXTextBox is null) return;
+        if (_selectedLayoutElement is null)
+        {
+            SelectedElementText.Text = "Select an element on the ID or use Restore field.";
+            ElementTextBox.Clear();
+            return;
+        }
         var p = _layout.Get(_selectedLayoutElement.Key);
         SelectedElementText.Text = _selectedLayoutElement.DisplayName;
         var custom = SelectedCustom;
-        CustomElementPanel.Visibility = custom is null ? Visibility.Collapsed : Visibility.Visible;
+        TextContentPanel.Visibility = _selectedLayoutElement.Kind == IdLayoutKind.Text ? Visibility.Visible : Visibility.Collapsed;
+        ReplaceElementImageButton.Visibility = _selectedLayoutElement.Kind == IdLayoutKind.Image ? Visibility.Visible : Visibility.Collapsed;
+        ElementTextBox.Text = _selectedLayoutElement.Kind == IdLayoutKind.Text ? ResolvePreviewText(_selectedLayoutElement) : string.Empty;
+        CustomElementPanel.Visibility = custom is not null && custom.Kind != IdLayoutKind.Text ? Visibility.Visible : Visibility.Collapsed;
         if (custom is not null)
         {
             CustomContentTextBox.Text = custom.Kind == IdLayoutKind.Text ? custom.Content : custom.Name;
@@ -607,6 +613,8 @@ public partial class MainWindow : Window
     {
         if (_selectedLayoutElement is null) return;
         if (_layout.Locked) { MessageBox.Show("Layout is locked. Turn off Lock layout first.", "DIKERMA", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+        RememberLayout();
+        ApplyTextContent();
         var p = _layout.Get(_selectedLayoutElement.Key);
         p.XMm = Read(LayoutXTextBox, p.XMm); p.YMm = Read(LayoutYTextBox, p.YMm);
         p.WidthMm = Read(LayoutWidthTextBox, p.WidthMm); p.HeightMm = Read(LayoutHeightTextBox, p.HeightMm);
@@ -629,8 +637,7 @@ public partial class MainWindow : Window
         p.ShadowDxMm = Read(LayoutShadowXTextBox, p.ShadowDxMm); p.ShadowDyMm = Read(LayoutShadowYTextBox, p.ShadowDyMm);
         if (SelectedCustom is { } custom)
         {
-            if (custom.Kind == IdLayoutKind.Text) custom.Content = CustomContentTextBox.Text;
-            else custom.Name = CustomContentTextBox.Text.Trim();
+            if (custom.Kind != IdLayoutKind.Text) custom.Name = CustomContentTextBox.Text.Trim();
             custom.FillColor = NormalizeHex(ShapeFillTextBox.Text, custom.FillColor);
             custom.BorderColor = NormalizeHex(ShapeBorderTextBox.Text, custom.BorderColor);
         }
@@ -664,6 +671,7 @@ public partial class MainWindow : Window
     private void Nudge(double dx, double dy)
     {
         if (_selectedLayoutElement is null || _layout.Locked) return;
+        RememberLayout();
         var p = _layout.Get(_selectedLayoutElement.Key); p.XMm += dx; p.YMm += dy; p.Clamp();
         LoadLayoutProperties(); RefreshLayoutPreview();
     }
@@ -671,18 +679,21 @@ public partial class MainWindow : Window
     private void CenterX_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLayoutElement is null || _layout.Locked) return;
+        RememberLayout();
         var p = _layout.Get(_selectedLayoutElement.Key); p.XMm = (LayoutCatalog.CardWidthMm - p.WidthMm) / 2; p.Clamp(); LoadLayoutProperties(); RefreshLayoutPreview();
     }
 
     private void CenterY_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLayoutElement is null || _layout.Locked) return;
+        RememberLayout();
         var p = _layout.Get(_selectedLayoutElement.Key); p.YMm = (LayoutCatalog.CardHeightMm - p.HeightMm) / 2; p.Clamp(); LoadLayoutProperties(); RefreshLayoutPreview();
     }
 
     private void ResetSelected_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLayoutElement is null || _layout.Locked) return;
+        RememberLayout();
         _layout.Elements[_selectedLayoutElement.Key] = LayoutCatalog.DefaultPlacement(_selectedLayoutElement);
         LoadLayoutProperties(); RefreshLayoutPreview();
     }
@@ -690,12 +701,14 @@ public partial class MainWindow : Window
     private void ResetSide_Click(object sender, RoutedEventArgs e)
     {
         if (_layout.Locked) return;
+        RememberLayout();
         foreach (var def in CurrentDefinitions()) _layout.Elements[def.Key] = LayoutCatalog.DefaultPlacement(def);
         LoadLayoutProperties(); RefreshLayoutPreview();
     }
 
     private void SaveLayout_Click(object sender, RoutedEventArgs e)
     {
+        if (!_layout.Locked && _selectedLayoutElement is not null) ApplyLayoutProperties_Click(sender, e);
         _layout.SnapToGrid = SnapToGridCheckBox.IsChecked == true;
         _layout.GridSizeMm = SelectedGridSize();
         _layout.Locked = LayoutLockedCheckBox.IsChecked == true;
@@ -771,42 +784,8 @@ public partial class MainWindow : Window
         _store.SaveSettings(_settings); RefreshLayoutPreview(); SetStatus("Settings saved");
     }
 
-    private string ResolvePreviewText(LayoutElementDefinition definition)
-    {
-        var employee = _employees.FirstOrDefault();
-        if (employee is null) return definition.SampleText;
-        return definition.Key switch
-        {
-            "front_name_value" => employee.FullName,
-            "front_designation_value" => employee.Position,
-            "front_employee_no_value" => employee.ControlNumber,
-            "back_dob_value" => PdfExportService.FormatDate(employee.Birthdate),
-            "back_sex_value" => employee.Sex,
-            "back_civil_value" => employee.CivilStatus,
-            "back_address_value" => employee.Address,
-            "back_issuer_value" => _settings.IssuerName,
-            "back_captain_name" => _settings.CaptainName,
-            "back_captain_title" => _settings.CaptainTitle,
-            "back_footer_address" => _settings.FooterAddress,
-            "back_footer_contact" => _settings.FooterContact,
-            _ => definition.SampleText
-        };
-    }
-
-    private string? ResolvePreviewImage(string key)
-    {
-        var employee = _employees.FirstOrDefault();
-        return key switch
-        {
-            "front_logo_1" => _settings.Logo1Path,
-            "front_logo_2" => _settings.Logo2Path,
-            "front_photo" => employee?.PhotoPath,
-            "front_signature" => employee?.SignaturePath,
-            "front_qr" => employee?.QrImagePath,
-            "back_captain_signature" => _settings.CaptainSignaturePath,
-            _ => null
-        };
-    }
+    private string ResolvePreviewText(LayoutElementDefinition definition) =>
+        PdfExportService.ResolveElementText(definition, _employees.FirstOrDefault(), _settings, _layout);
 
     private static string? ChooseImage()
     {
@@ -852,6 +831,6 @@ public partial class MainWindow : Window
     private static double Read(TextBox box, double fallback) => double.TryParse(box.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : fallback;
     private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string? NullIfBlank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
-    private void SetStatus(string text) => StatusText.Text = $"{text}\nOffline • Windows v0.1.0";
+    private void SetStatus(string text) => StatusText.Text = $"{text}\nOffline • Windows v0.1.1";
     private void ShowError(Exception ex) { SetStatus("Operation failed"); MessageBox.Show(ex.Message, "DIKERMA", MessageBoxButton.OK, MessageBoxImage.Error); }
 }

@@ -12,6 +12,8 @@ public static class LayoutCatalog
 
     public static readonly IReadOnlyList<LayoutElementDefinition> Elements = new List<LayoutElementDefinition>
     {
+        new("front_background", IdLayoutSide.Front, "Front background / design", IdLayoutKind.Image, 0, 0, 85, 115),
+        new("back_background", IdLayoutSide.Back, "Back background / design", IdLayoutKind.Image, 0, 0, 85, 115),
         new("front_logo_1", IdLayoutSide.Front, "Logo 1", IdLayoutKind.Image, 5, 4, 14, 14),
         new("front_logo_2", IdLayoutSide.Front, "Logo 2", IdLayoutKind.Image, 67, 4, 12, 12),
         new("front_barangay", IdLayoutSide.Front, "Barangay title", IdLayoutKind.Text, 20, 4.5, 45, 6, 12.5, IdTextAlignment.Center, White, true, "BARANGAY SIBULAN"),
