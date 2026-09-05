@@ -1,0 +1,260 @@
+<Window x:Class="Dikerma.Windows.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DIKERMA – Barangay ID Maker" Width="1400" Height="860"
+        MinWidth="1100" MinHeight="700" WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Surface}">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="{StaticResource BrandGreenDark}">
+            <Grid Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="DIKERMA" Foreground="White" FontSize="26" FontWeight="Bold" />
+                    <TextBlock Text="Barangay ID Maker" Foreground="#D9EFE2" FontSize="13" Margin="0,2,0,22" />
+                    <Button Content="Records" HorizontalContentAlignment="Left" Click="NavigateRecords_Click" />
+                    <Button Content="Generate PDF" HorizontalContentAlignment="Left" Click="NavigateGenerate_Click" />
+                    <Button Content="Layout Studio" HorizontalContentAlignment="Left" Click="NavigateLayout_Click" />
+                    <Button Content="Settings" HorizontalContentAlignment="Left" Click="NavigateSettings_Click" />
+                </StackPanel>
+                <TextBlock Grid.Row="2" x:Name="StatusText" Text="Offline • Windows v0.1.0" Foreground="#D9EFE2" TextWrapping="Wrap" FontSize="12" />
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Column="1" x:Name="MainTabs" SelectedIndex="0" Background="Transparent" BorderThickness="0">
+            <TabControl.Template>
+                <ControlTemplate TargetType="TabControl">
+                    <ContentPresenter ContentSource="SelectedContent" />
+                </ControlTemplate>
+            </TabControl.Template>
+
+            <TabItem>
+                <Grid Margin="24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Margin="0,0,0,16">
+                        <TextBlock Text="Employee Records" FontSize="26" FontWeight="Bold" Foreground="#193527" />
+                        <TextBlock Text="Local records only. Photos, signatures, and QR images are stored on this PC." Foreground="#5B6C63" />
+                    </StackPanel>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="18" />
+                            <ColumnDefinition Width="1.15*" />
+                        </Grid.ColumnDefinitions>
+                        <DataGrid x:Name="EmployeesGrid" Grid.Column="0" AutoGenerateColumns="False" IsReadOnly="True"
+                                  SelectionMode="Single" SelectionChanged="EmployeesGrid_SelectionChanged"
+                                  CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Employee No." Binding="{Binding ControlNumber}" Width="120" />
+                                <DataGridTextColumn Header="Name" Binding="{Binding FullName}" Width="*" />
+                                <DataGridTextColumn Header="Designation" Binding="{Binding Position}" Width="180" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Border Grid.Column="2" Background="White" CornerRadius="8" Padding="16" BorderBrush="#DCE5DF" BorderThickness="1">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="Record editor" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                    <TextBlock Text="Full name" /><TextBox x:Name="FullNameTextBox" />
+                                    <TextBlock Text="Designation" /><TextBox x:Name="PositionTextBox" />
+                                    <TextBlock Text="Employee / Control No." /><TextBox x:Name="ControlNumberTextBox" />
+                                    <TextBlock Text="Birthdate" /><TextBox x:Name="BirthdateTextBox" ToolTip="Example: 1987-01-12 or January 12, 1987" />
+                                    <TextBlock Text="Address" /><TextBox x:Name="AddressTextBox" AcceptsReturn="True" Height="62" TextWrapping="Wrap" />
+                                    <TextBlock Text="Sex" /><TextBox x:Name="SexTextBox" />
+                                    <TextBlock Text="Civil status" /><TextBox x:Name="CivilStatusTextBox" />
+                                    <TextBlock Text="Status" /><ComboBox x:Name="RecordStatusComboBox"><ComboBoxItem Content="Active"/><ComboBoxItem Content="Inactive"/></ComboBox>
+
+                                    <Separator Margin="0,10" />
+                                    <TextBlock Text="ID Photo" FontWeight="SemiBold" />
+                                    <TextBox x:Name="PhotoPathTextBox" IsReadOnly="True" />
+                                    <CheckBox x:Name="PhotoKeepOriginalCheckBox" Content="Keep original (skip White BG cleanup)" Margin="0,0,0,5" />
+                                    <Button Content="Choose Photo" Click="ChoosePhoto_Click" />
+
+                                    <TextBlock Text="Employee Signature" FontWeight="SemiBold" Margin="0,10,0,0" />
+                                    <TextBox x:Name="SignaturePathTextBox" IsReadOnly="True" />
+                                    <CheckBox x:Name="SignatureKeepOriginalCheckBox" Content="Keep original (recommended for prepared transparent PNG)" Margin="0,0,0,5" />
+                                    <Button Content="Choose Signature" Click="ChooseSignature_Click" />
+
+                                    <TextBlock Text="QR Image (manual upload)" FontWeight="SemiBold" Margin="0,10,0,0" />
+                                    <TextBox x:Name="QrPathTextBox" IsReadOnly="True" />
+                                    <Button Content="Choose QR Image" Click="ChooseQr_Click" />
+
+                                    <Separator Margin="0,12" />
+                                    <WrapPanel>
+                                        <Button Content="New" Click="NewRecord_Click" />
+                                        <Button Content="Save Record" Background="{StaticResource BrandGreen}" Foreground="White" Click="SaveRecord_Click" />
+                                        <Button Content="Delete" Click="DeleteRecord_Click" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem>
+                <Grid Margin="28">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Generate A4 PDF" FontSize="26" FontWeight="Bold" Foreground="#193527" />
+                        <TextBlock Text="Person 1 uses the top front/back pair. Person 2 is optional and uses the bottom pair." Foreground="#5B6C63" />
+                    </StackPanel>
+                    <Border Grid.Row="1" Background="White" Padding="20" CornerRadius="8" BorderBrush="#DCE5DF" BorderThickness="1" Margin="0,22,0,0" MaxWidth="760" HorizontalAlignment="Left">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="420"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <TextBlock Text="Person 1" VerticalAlignment="Center" /><ComboBox Grid.Column="1" x:Name="Person1ComboBox" DisplayMemberPath="FullName" />
+                            <TextBlock Grid.Row="1" Text="Person 2 (optional)" VerticalAlignment="Center" /><ComboBox Grid.Row="1" Grid.Column="1" x:Name="Person2ComboBox" DisplayMemberPath="FullName" />
+                            <Button Grid.Row="2" Grid.Column="1" Content="Export PDF" Width="150" HorizontalAlignment="Left" Background="{StaticResource BrandGreen}" Foreground="White" Click="ExportPdf_Click" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem>
+                <Grid Margin="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="390" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid Grid.ColumnSpan="2" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="280"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="Side" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <ComboBox Grid.Column="1" x:Name="LayoutSideComboBox" SelectionChanged="LayoutSideComboBox_SelectionChanged" />
+                        <TextBlock Grid.Column="2" Text="Element" VerticalAlignment="Center" Margin="16,0,8,0" />
+                        <ComboBox Grid.Column="3" x:Name="LayoutElementComboBox" DisplayMemberPath="DisplayName" SelectionChanged="LayoutElementComboBox_SelectionChanged" />
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <CheckBox x:Name="SnapToGridCheckBox" Content="Snap" VerticalAlignment="Center" Checked="SnapSettingsChanged" Unchecked="SnapSettingsChanged" />
+                            <ComboBox x:Name="GridSizeComboBox" Width="75" Margin="8,3" SelectionChanged="SnapSettingsChanged"><ComboBoxItem Content="0.5"/><ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="5"/></ComboBox>
+                            <CheckBox x:Name="LayoutLockedCheckBox" Content="Lock layout" VerticalAlignment="Center" Margin="8,0" Checked="LayoutLockChanged" Unchecked="LayoutLockChanged" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Grid.Row="1" Grid.Column="0" Background="#E9EEE9" CornerRadius="8" Padding="12" Margin="0,0,14,0">
+                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                            <Canvas x:Name="LayoutCanvas" Width="425" Height="575" Background="White" ClipToBounds="True" />
+                        </Viewbox>
+                    </Border>
+
+                    <Border Grid.Row="1" Grid.Column="1" Background="White" CornerRadius="8" Padding="14" BorderBrush="#DCE5DF" BorderThickness="1">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="Selected element" FontSize="18" FontWeight="SemiBold" />
+                                <TextBlock x:Name="SelectedElementText" Foreground="#5B6C63" Margin="0,0,0,10" />
+                                <UniformGrid Columns="2">
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="X (mm)"/><TextBox x:Name="LayoutXTextBox"/></StackPanel>
+                                    <StackPanel Margin="6,0,0,0"><TextBlock Text="Y (mm)"/><TextBox x:Name="LayoutYTextBox"/></StackPanel>
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Width (mm)"/><TextBox x:Name="LayoutWidthTextBox"/></StackPanel>
+                                    <StackPanel Margin="6,0,0,0"><TextBlock Text="Height (mm)"/><TextBox x:Name="LayoutHeightTextBox"/></StackPanel>
+                                </UniformGrid>
+                                <TextBlock Text="Font size (pt)"/><TextBox x:Name="LayoutFontSizeTextBox"/>
+                                <TextBlock Text="Font family"/><ComboBox x:Name="LayoutFontFamilyComboBox"><ComboBoxItem Tag="sans" Content="Sans Serif"/><ComboBoxItem Tag="serif" Content="Serif"/><ComboBoxItem Tag="monospace" Content="Monospace"/></ComboBox>
+                                <TextBlock Text="Alignment"/><ComboBox x:Name="LayoutAlignmentComboBox" />
+                                <WrapPanel>
+                                    <CheckBox x:Name="LayoutBoldCheckBox" Content="Bold" Margin="0,4,14,4" />
+                                    <CheckBox x:Name="LayoutVisibleCheckBox" Content="Visible" Margin="0,4,14,4" />
+                                </WrapPanel>
+                                <TextBlock Text="Text color (HEX)"/><TextBox x:Name="LayoutTextColorTextBox"/>
+
+                                <Separator Margin="0,8" />
+                                <CheckBox x:Name="LayoutUnderlineCheckBox" Content="Underline" FontWeight="SemiBold" />
+                                <UniformGrid Columns="2">
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Underline color"/><TextBox x:Name="LayoutUnderlineColorTextBox"/></StackPanel>
+                                    <StackPanel Margin="6,0,0,0"><TextBlock Text="Thickness pt"/><TextBox x:Name="LayoutUnderlineThicknessTextBox"/></StackPanel>
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Offset mm"/><TextBox x:Name="LayoutUnderlineOffsetTextBox"/></StackPanel>
+                                    <StackPanel Margin="6,0,0,0"><TextBlock Text="Width mode"/><ComboBox x:Name="LayoutUnderlineModeComboBox"/></StackPanel>
+                                </UniformGrid>
+
+                                <Separator Margin="0,8" />
+                                <CheckBox x:Name="LayoutOutlineCheckBox" Content="Text outline" FontWeight="SemiBold" />
+                                <UniformGrid Columns="2">
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Outline color"/><TextBox x:Name="LayoutOutlineColorTextBox"/></StackPanel>
+                                    <StackPanel Margin="6,0,0,0"><TextBlock Text="Thickness pt"/><TextBox x:Name="LayoutOutlineThicknessTextBox"/></StackPanel>
+                                </UniformGrid>
+
+                                <Separator Margin="0,8" />
+                                <CheckBox x:Name="LayoutShadowCheckBox" Content="Text shadow" FontWeight="SemiBold" />
+                                <UniformGrid Columns="2">
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="Shadow color"/><TextBox x:Name="LayoutShadowColorTextBox"/></StackPanel>
+                                    <StackPanel Margin="6,0,0,0"><TextBlock Text="Opacity 0–1"/><TextBox x:Name="LayoutShadowOpacityTextBox"/></StackPanel>
+                                    <StackPanel Margin="0,0,6,0"><TextBlock Text="X offset mm"/><TextBox x:Name="LayoutShadowXTextBox"/></StackPanel>
+                                    <StackPanel Margin="6,0,0,0"><TextBlock Text="Y offset mm"/><TextBox x:Name="LayoutShadowYTextBox"/></StackPanel>
+                                </UniformGrid>
+
+                                <Button Content="Apply selected settings" Background="{StaticResource BrandGreen}" Foreground="White" Click="ApplyLayoutProperties_Click" />
+                                <TextBlock Text="Nudge" FontWeight="SemiBold" Margin="0,8,0,2" />
+                                <UniformGrid Columns="4">
+                                    <Button Content="←" Click="NudgeLeft_Click"/><Button Content="↑" Click="NudgeUp_Click"/><Button Content="↓" Click="NudgeDown_Click"/><Button Content="→" Click="NudgeRight_Click"/>
+                                </UniformGrid>
+                                <WrapPanel>
+                                    <Button Content="Center X" Click="CenterX_Click"/><Button Content="Center Y" Click="CenterY_Click"/>
+                                </WrapPanel>
+                                <WrapPanel>
+                                    <Button Content="Reset selected" Click="ResetSelected_Click"/><Button Content="Reset side" Click="ResetSide_Click"/>
+                                </WrapPanel>
+                                <Button Content="Save placement • Apply to all IDs" Background="#193527" Foreground="White" Click="SaveLayout_Click" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem>
+                <Grid Margin="28">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Settings" FontSize="26" FontWeight="Bold" Foreground="#193527" />
+                        <TextBlock Text="Uploaded front/back artwork is the actual ID design. The app only places dynamic data on top." Foreground="#5B6C63" />
+                    </StackPanel>
+                    <ScrollViewer Grid.Row="1" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel MaxWidth="820" HorizontalAlignment="Left">
+                            <TextBlock Text="Artwork & Assets" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="Front background"/><TextBox x:Name="FrontBackgroundTextBox" IsReadOnly="True"/><Button Content="Choose Front Background" HorizontalAlignment="Left" Click="ChooseFrontBackground_Click"/>
+                            <TextBlock Text="Back background" Margin="0,8,0,0"/><TextBox x:Name="BackBackgroundTextBox" IsReadOnly="True"/><Button Content="Choose Back Background" HorizontalAlignment="Left" Click="ChooseBackBackground_Click"/>
+                            <TextBlock Text="Logo 1" Margin="0,8,0,0"/><TextBox x:Name="Logo1TextBox" IsReadOnly="True"/><Button Content="Choose Logo 1" HorizontalAlignment="Left" Click="ChooseLogo1_Click"/>
+                            <TextBlock Text="Logo 2" Margin="0,8,0,0"/><TextBox x:Name="Logo2TextBox" IsReadOnly="True"/><Button Content="Choose Logo 2" HorizontalAlignment="Left" Click="ChooseLogo2_Click"/>
+                            <TextBlock Text="Punong Barangay signature" Margin="0,8,0,0"/><TextBox x:Name="CaptainSignatureTextBox" IsReadOnly="True"/><Button Content="Choose Approver Signature" HorizontalAlignment="Left" Click="ChooseCaptainSignature_Click"/>
+
+                            <Separator Margin="0,16"/>
+                            <TextBlock Text="Back ID details" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="Approver name"/><TextBox x:Name="CaptainNameTextBox"/>
+                            <TextBlock Text="Approver title"/><TextBox x:Name="CaptainTitleTextBox"/>
+                            <TextBlock Text="Issued by"/><TextBox x:Name="IssuerTextBox"/>
+                            <TextBlock Text="Footer address"/><TextBox x:Name="FooterAddressTextBox"/>
+                            <TextBlock Text="Footer contact"/><TextBox x:Name="FooterContactTextBox"/>
+
+                            <Separator Margin="0,16"/>
+                            <TextBlock Text="Optional printed lines / outlines" FontSize="18" FontWeight="SemiBold" />
+                            <WrapPanel>
+                                <CheckBox x:Name="OuterCutGuideCheckBox" Content="Outer cut guide" Margin="0,5,16,5"/>
+                                <CheckBox x:Name="PhotoOutlineCheckBox" Content="Photo outline" Margin="0,5,16,5"/>
+                                <CheckBox x:Name="EmployeeDividerCheckBox" Content="Employee dividers" Margin="0,5,16,5"/>
+                                <CheckBox x:Name="SignatureLineCheckBox" Content="Signature line" Margin="0,5,16,5"/>
+                                <CheckBox x:Name="QrOutlineCheckBox" Content="QR outline" Margin="0,5,16,5"/>
+                                <CheckBox x:Name="BackDividerCheckBox" Content="Back dividers" Margin="0,5,16,5"/>
+                            </WrapPanel>
+                            <TextBlock Text="Outline thickness (pt)"/><TextBox x:Name="OutlineThicknessTextBox" Width="120" HorizontalAlignment="Left"/>
+                            <Button Content="Save Settings" Background="{StaticResource BrandGreen}" Foreground="White" Width="150" HorizontalAlignment="Left" Click="SaveSettings_Click"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
