@@ -18,26 +18,21 @@ public sealed class OfflineImageProcessor
         var pixels = new byte[stride * height];
         bitmap.CopyPixels(pixels, stride, 0);
 
-        var background = EstimateCornerBackground(pixels, width, height, stride);
-        const double threshold = 92;
+        var matte = BuildAdaptiveBackgroundMatte(pixels, width, height, stride);
 
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
+                var pixelIndex = y * width + x;
                 var i = y * stride + x * 4;
-                var b = pixels[i];
-                var g = pixels[i + 1];
-                var r = pixels[i + 2];
-                var distance = ColorDistance(r, g, b, background.R, background.G, background.B);
+                var keep = matte[pixelIndex] / 255.0;
 
-                if (distance < threshold)
-                {
-                    var blend = Math.Clamp((threshold - distance) / 32.0, 0, 1);
-                    pixels[i] = (byte)Math.Round(b + (255 - b) * blend);
-                    pixels[i + 1] = (byte)Math.Round(g + (255 - g) * blend);
-                    pixels[i + 2] = (byte)Math.Round(r + (255 - r) * blend);
-                }
+                // Composite the retained foreground over clean white. The adaptive matte
+                // keeps hair/clothing edges while removing only edge-connected background.
+                pixels[i] = CompositeOverWhite(pixels[i], keep);
+                pixels[i + 1] = CompositeOverWhite(pixels[i + 1], keep);
+                pixels[i + 2] = CompositeOverWhite(pixels[i + 2], keep);
                 pixels[i + 3] = 255;
             }
         }
@@ -56,32 +51,15 @@ public sealed class OfflineImageProcessor
         var pixels = new byte[stride * height];
         bitmap.CopyPixels(pixels, stride, 0);
 
-        var background = EstimateCornerBackground(pixels, width, height, stride);
-        const double transparentThreshold = 105;
-        const double feather = 45;
+        var matte = BuildAdaptiveBackgroundMatte(pixels, width, height, stride, signatureMode: true);
 
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
+                var pixelIndex = y * width + x;
                 var i = y * stride + x * 4;
-                var b = pixels[i];
-                var g = pixels[i + 1];
-                var r = pixels[i + 2];
-                var distance = ColorDistance(r, g, b, background.R, background.G, background.B);
-
-                if (distance <= transparentThreshold)
-                {
-                    pixels[i + 3] = 0;
-                }
-                else if (distance < transparentThreshold + feather)
-                {
-                    pixels[i + 3] = (byte)Math.Round(255 * ((distance - transparentThreshold) / feather));
-                }
-                else
-                {
-                    pixels[i + 3] = 255;
-                }
+                pixels[i + 3] = matte[pixelIndex];
             }
         }
 
@@ -112,43 +90,257 @@ public sealed class OfflineImageProcessor
         return converted;
     }
 
-    private static (byte R, byte G, byte B) EstimateCornerBackground(byte[] pixels, int width, int height, int stride)
+    /// <summary>
+    /// Builds a foreground matte (0 = background, 255 = foreground) without internet,
+    /// cloud APIs, or ML packages. The remover learns a robust background color from
+    /// the image border, measures border variation, then flood-fills only background
+    /// that is connected to an outer edge. This protects similarly colored clothing,
+    /// skin, hair, and objects inside the portrait much better than a global threshold.
+    /// </summary>
+    private static byte[] BuildAdaptiveBackgroundMatte(
+        byte[] pixels,
+        int width,
+        int height,
+        int stride,
+        bool signatureMode = false)
     {
-        var patch = Math.Max(2, Math.Min(18, Math.Min(width, height) / 12));
-        long r = 0, g = 0, b = 0, count = 0;
-        var origins = new[]
-        {
-            (0, 0),
-            (Math.Max(0, width - patch), 0),
-            (0, Math.Max(0, height - patch)),
-            (Math.Max(0, width - patch), Math.Max(0, height - patch))
-        };
+        if (width <= 0 || height <= 0)
+            return Array.Empty<byte>();
 
-        foreach (var (ox, oy) in origins)
+        var model = EstimateBorderBackground(pixels, width, height, stride);
+        var strongThreshold = signatureMode
+            ? Math.Clamp(model.Variation * 2.6 + 22.0, 30.0, 105.0)
+            : Math.Clamp(model.Variation * 2.15 + 18.0, 26.0, 88.0);
+        var weakThreshold = signatureMode
+            ? Math.Clamp(strongThreshold + 58.0, 80.0, 165.0)
+            : Math.Clamp(strongThreshold + 44.0, 62.0, 138.0);
+        var localStepThreshold = signatureMode ? 82.0 : 70.0;
+
+        var count = width * height;
+        var background = new bool[count];
+        var queue = new int[count];
+        var head = 0;
+        var tail = 0;
+
+        void TrySeed(int x, int y)
         {
-            for (var y = oy; y < Math.Min(height, oy + patch); y++)
+            var index = y * width + x;
+            if (background[index]) return;
+            if (DistanceAt(pixels, x, y, stride, model.R, model.G, model.B) > strongThreshold) return;
+            background[index] = true;
+            queue[tail++] = index;
+        }
+
+        // Seed the flood fill from the complete image perimeter, not just four corners.
+        for (var x = 0; x < width; x++)
+        {
+            TrySeed(x, 0);
+            if (height > 1) TrySeed(x, height - 1);
+        }
+        for (var y = 1; y < height - 1; y++)
+        {
+            TrySeed(0, y);
+            if (width > 1) TrySeed(width - 1, y);
+        }
+
+        while (head < tail)
+        {
+            var current = queue[head++];
+            var x = current % width;
+            var y = current / width;
+
+            TryNeighbor(x - 1, y, x, y);
+            TryNeighbor(x + 1, y, x, y);
+            TryNeighbor(x, y - 1, x, y);
+            TryNeighbor(x, y + 1, x, y);
+        }
+
+        void TryNeighbor(int nx, int ny, int px, int py)
+        {
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height) return;
+            var index = ny * width + nx;
+            if (background[index]) return;
+
+            var modelDistance = DistanceAt(pixels, nx, ny, stride, model.R, model.G, model.B);
+            if (modelDistance > weakThreshold) return;
+
+            var localDistance = PixelDistance(pixels, nx, ny, px, py, stride);
+            if (modelDistance > strongThreshold && localDistance > localStepThreshold) return;
+
+            background[index] = true;
+            queue[tail++] = index;
+        }
+
+        var matte = new byte[count];
+        Array.Fill(matte, (byte)255);
+        for (var i = 0; i < count; i++)
+        {
+            if (background[i]) matte[i] = 0;
+        }
+
+        // Feather only the immediate foreground boundary. Interior pixels remain fully
+        // opaque so faces, text on shirts, and other details do not become washed out.
+        var radius = signatureMode ? 2 : 3;
+        var feathered = (byte[])matte.Clone();
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
             {
-                for (var x = ox; x < Math.Min(width, ox + patch); x++)
+                var index = y * width + x;
+                if (background[index]) continue;
+
+                var nearestBackground = radius + 1;
+                for (var oy = -radius; oy <= radius; oy++)
                 {
-                    var i = y * stride + x * 4;
-                    b += pixels[i];
-                    g += pixels[i + 1];
-                    r += pixels[i + 2];
-                    count++;
+                    var yy = y + oy;
+                    if (yy < 0 || yy >= height) continue;
+                    for (var ox = -radius; ox <= radius; ox++)
+                    {
+                        var xx = x + ox;
+                        if (xx < 0 || xx >= width) continue;
+                        if (!background[yy * width + xx]) continue;
+                        var distance = Math.Abs(ox) + Math.Abs(oy);
+                        if (distance < nearestBackground) nearestBackground = distance;
+                    }
                 }
+
+                if (nearestBackground > radius) continue;
+
+                var colorDistance = DistanceAt(pixels, x, y, stride, model.R, model.G, model.B);
+                var colorKeep = SmoothStep(strongThreshold * 0.72, weakThreshold, colorDistance);
+                var spatialKeep = Math.Clamp(nearestBackground / (double)(radius + 1), 0.18, 1.0);
+                var keep = Math.Max(colorKeep, spatialKeep);
+                feathered[index] = (byte)Math.Round(255 * Math.Clamp(keep, 0, 1));
             }
         }
 
-        if (count == 0) return (255, 255, 255);
-        return ((byte)(r / count), (byte)(g / count), (byte)(b / count));
+        // Remove isolated one-pixel background noise left inside an otherwise clean
+        // background region and gently restore isolated foreground specks near edges.
+        return CleanupMatte(feathered, width, height);
+    }
+
+    private static byte[] CleanupMatte(byte[] matte, int width, int height)
+    {
+        if (width < 3 || height < 3) return matte;
+        var cleaned = (byte[])matte.Clone();
+
+        for (var y = 1; y < height - 1; y++)
+        {
+            for (var x = 1; x < width - 1; x++)
+            {
+                var index = y * width + x;
+                var transparentNeighbors = 0;
+                var opaqueNeighbors = 0;
+
+                for (var oy = -1; oy <= 1; oy++)
+                {
+                    for (var ox = -1; ox <= 1; ox++)
+                    {
+                        if (ox == 0 && oy == 0) continue;
+                        var value = matte[(y + oy) * width + (x + ox)];
+                        if (value <= 24) transparentNeighbors++;
+                        if (value >= 232) opaqueNeighbors++;
+                    }
+                }
+
+                if (matte[index] >= 232 && transparentNeighbors >= 7)
+                    cleaned[index] = 0;
+                else if (matte[index] <= 24 && opaqueNeighbors >= 7)
+                    cleaned[index] = 255;
+            }
+        }
+
+        return cleaned;
+    }
+
+    private static (byte R, byte G, byte B, double Variation) EstimateBorderBackground(
+        byte[] pixels,
+        int width,
+        int height,
+        int stride)
+    {
+        var samples = new List<(byte R, byte G, byte B)>();
+        var step = Math.Max(1, Math.Min(width, height) / 180);
+        var band = Math.Max(1, Math.Min(6, Math.Min(width, height) / 40));
+
+        for (var y = 0; y < height; y += step)
+        {
+            for (var xBand = 0; xBand < band; xBand++)
+            {
+                AddSample(xBand, y);
+                if (width - 1 - xBand != xBand) AddSample(width - 1 - xBand, y);
+            }
+        }
+
+        for (var x = 0; x < width; x += step)
+        {
+            for (var yBand = 0; yBand < band; yBand++)
+            {
+                AddSample(x, yBand);
+                if (height - 1 - yBand != yBand) AddSample(x, height - 1 - yBand);
+            }
+        }
+
+        void AddSample(int x, int y)
+        {
+            var i = y * stride + x * 4;
+            samples.Add((pixels[i + 2], pixels[i + 1], pixels[i]));
+        }
+
+        if (samples.Count == 0) return (255, 255, 255, 0);
+
+        var rs = samples.Select(s => s.R).OrderBy(v => v).ToArray();
+        var gs = samples.Select(s => s.G).OrderBy(v => v).ToArray();
+        var bs = samples.Select(s => s.B).OrderBy(v => v).ToArray();
+        var r = rs[rs.Length / 2];
+        var g = gs[gs.Length / 2];
+        var b = bs[bs.Length / 2];
+
+        var distances = samples
+            .Select(s => ColorDistance(s.R, s.G, s.B, r, g, b))
+            .OrderBy(v => v)
+            .ToArray();
+
+        // 75th percentile ignores a person/object touching part of the border while
+        // still adapting to shadows and uneven lighting on a plain backdrop.
+        var variationIndex = Math.Clamp((int)Math.Round((distances.Length - 1) * 0.75), 0, distances.Length - 1);
+        var variation = distances[variationIndex];
+        return (r, g, b, variation);
+    }
+
+    private static double DistanceAt(byte[] pixels, int x, int y, int stride, byte r, byte g, byte b)
+    {
+        var i = y * stride + x * 4;
+        return ColorDistance(pixels[i + 2], pixels[i + 1], pixels[i], r, g, b);
+    }
+
+    private static double PixelDistance(byte[] pixels, int x1, int y1, int x2, int y2, int stride)
+    {
+        var i1 = y1 * stride + x1 * 4;
+        var i2 = y2 * stride + x2 * 4;
+        return ColorDistance(
+            pixels[i1 + 2], pixels[i1 + 1], pixels[i1],
+            pixels[i2 + 2], pixels[i2 + 1], pixels[i2]);
+    }
+
+    private static byte CompositeOverWhite(byte channel, double keep)
+        => (byte)Math.Round(channel * keep + 255 * (1.0 - keep));
+
+    private static double SmoothStep(double edge0, double edge1, double value)
+    {
+        if (edge1 <= edge0) return value >= edge1 ? 1 : 0;
+        var t = Math.Clamp((value - edge0) / (edge1 - edge0), 0, 1);
+        return t * t * (3 - 2 * t);
     }
 
     private static double ColorDistance(byte r1, byte g1, byte b1, byte r2, byte g2, byte b2)
     {
+        // Weighted RGB distance gives green differences slightly more importance,
+        // which improves separation on common green/blue/plain-color photo backdrops.
         var dr = r1 - r2;
         var dg = g1 - g2;
         var db = b1 - b2;
-        return Math.Sqrt(dr * dr + dg * dg + db * db);
+        return Math.Sqrt(dr * dr * 0.30 + dg * dg * 0.59 + db * db * 0.11);
     }
 
     private static void SavePng(byte[] pixels, int width, int height, int stride, double dpiX, double dpiY, string output)
