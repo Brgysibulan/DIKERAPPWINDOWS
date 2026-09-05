@@ -1,0 +1,53 @@
+name: Build Windows App
+
+on:
+  push:
+    branches: [ main, windows-port-v0.1.0 ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Verify runtime code is offline-only
+        shell: pwsh
+        run: |
+          $patterns = @('HttpClient', 'WebClient', 'System.Net.Http', 'Socket(', 'TcpClient', 'UdpClient')
+          $files = Get-ChildItem -Path src -Recurse -Include *.cs,*.xaml
+          foreach ($pattern in $patterns) {
+            $matches = $files | Select-String -SimpleMatch $pattern
+            if ($matches) {
+              $matches | ForEach-Object { Write-Host $_ }
+              throw "Offline-only verification failed: found $pattern"
+            }
+          }
+          Write-Host "Offline-only verification passed."
+
+      - name: Restore
+        run: dotnet restore src/Dikerma.Windows/Dikerma.Windows.csproj
+
+      - name: Build
+        run: dotnet build src/Dikerma.Windows/Dikerma.Windows.csproj -c Release --no-restore
+
+      - name: Publish self-contained Windows x64
+        run: dotnet publish src/Dikerma.Windows/Dikerma.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: DIKERMA-Windows-x64
+          path: publish/**
+          if-no-files-found: error
