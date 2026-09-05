@@ -123,14 +123,14 @@ public partial class MainWindow
     private ContextMenu CreateElementMenu(string key)
     {
         var menu = new ContextMenu();
-        menu.Opened += (_, _) =>
-        {
-            LayoutElementComboBox.SelectedItem = LayoutElementComboBox.Items.Cast<LayoutElementDefinition>().FirstOrDefault(x => x.Key == key);
-        };
         void Add(string label, Action action)
         {
             var item = new MenuItem { Header = label, IsEnabled = !_layout.Locked };
-            item.Click += (_, _) => action();
+            item.Click += (_, _) =>
+            {
+                LayoutElementComboBox.SelectedItem = LayoutElementComboBox.Items.Cast<LayoutElementDefinition>().FirstOrDefault(x => x.Key == key);
+                action();
+            };
             menu.Items.Add(item);
         }
         Add("Edit content / replace image", EditSelectedContent);
