@@ -503,6 +503,24 @@ public partial class MainWindow : Window
         LoadLayoutProperties(); RefreshLayoutPreview(); SetStatus("Layout element updated (save placement to persist)");
     }
 
+    private void PickTextColor_Click(object sender, RoutedEventArgs e) => PickColor(LayoutTextColorTextBox);
+    private void PickUnderlineColor_Click(object sender, RoutedEventArgs e) => PickColor(LayoutUnderlineColorTextBox);
+    private void PickOutlineColor_Click(object sender, RoutedEventArgs e) => PickColor(LayoutOutlineColorTextBox);
+    private void PickShadowColor_Click(object sender, RoutedEventArgs e) => PickColor(LayoutShadowColorTextBox);
+
+    private static void PickColor(TextBox target)
+    {
+        using var dialog = new System.Windows.Forms.ColorDialog
+        {
+            AnyColor = true,
+            FullOpen = true,
+            Color = System.Drawing.ColorTranslator.FromHtml(NormalizeHex(target.Text, "#000000"))
+        };
+
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            target.Text = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+    }
+
     private void NudgeLeft_Click(object sender, RoutedEventArgs e) => Nudge(-NudgeStep(), 0);
     private void NudgeRight_Click(object sender, RoutedEventArgs e) => Nudge(NudgeStep(), 0);
     private void NudgeUp_Click(object sender, RoutedEventArgs e) => Nudge(0, -NudgeStep());
