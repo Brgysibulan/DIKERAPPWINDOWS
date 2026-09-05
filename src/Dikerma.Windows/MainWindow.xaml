@@ -224,7 +224,7 @@
                     </StackPanel>
                     <ScrollViewer Grid.Row="1" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
                         <StackPanel MaxWidth="820" HorizontalAlignment="Left">
-                            <TextBlock Text="Artwork & Assets" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="Artwork &amp; Assets" FontSize="18" FontWeight="SemiBold" />
                             <TextBlock Text="Front background"/><TextBox x:Name="FrontBackgroundTextBox" IsReadOnly="True"/><Button Content="Choose Front Background" HorizontalAlignment="Left" Click="ChooseFrontBackground_Click"/>
                             <TextBlock Text="Back background" Margin="0,8,0,0"/><TextBox x:Name="BackBackgroundTextBox" IsReadOnly="True"/><Button Content="Choose Back Background" HorizontalAlignment="Left" Click="ChooseBackBackground_Click"/>
                             <TextBlock Text="Logo 1" Margin="0,8,0,0"/><TextBox x:Name="Logo1TextBox" IsReadOnly="True"/><Button Content="Choose Logo 1" HorizontalAlignment="Left" Click="ChooseLogo1_Click"/>
