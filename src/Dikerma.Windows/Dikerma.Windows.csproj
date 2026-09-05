@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\dikerma.ico" />
+    <Resource Include="Assets\AppIcon.ico" />
     <PackageReference Include="PDFsharp-wpf" Version="6.2.4" />
   </ItemGroup>
 </Project>
