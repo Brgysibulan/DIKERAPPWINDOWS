@@ -9,11 +9,13 @@
     <Nullable>enable</Nullable>
     <AssemblyName>DIKERMA</AssemblyName>
     <RootNamespace>Dikerma.Windows</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
+    <ApplicationIcon>Assets/AppIcon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="Assets/AppIcon.ico" />
     <PackageReference Include="PDFsharp-wpf" Version="6.2.4" />
   </ItemGroup>
 </Project>

@@ -54,7 +54,7 @@ public sealed class PdfExportService
             DrawFallbackBackground(gfx, x, y, w, h, side);
         }
 
-        foreach (var definition in LayoutCatalog.ForSide(side))
+        foreach (var definition in layout.ForSide(side))
         {
             var placement = layout.Get(definition.Key);
             if (!placement.Visible) continue;
@@ -64,19 +64,11 @@ public sealed class PdfExportService
             var ew = Mm(placement.WidthMm);
             var eh = Mm(placement.HeightMm);
 
-            if (definition.Kind == IdLayoutKind.Image)
-            {
-                var imagePath = ResolveImage(definition.Key, employee, settings);
-                TryDrawImage(gfx, imagePath, ex, ey, ew, eh);
-            }
-            else
-            {
-                var text = ResolveText(definition.Key, definition.SampleText, employee, settings);
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    DrawStyledText(gfx, text, ex, ey, ew, eh, placement);
-                }
-            }
+            using var png = ElementRenderer.Png(definition, placement,
+                ResolveText(placement.BindingKey ?? definition.Key, definition.SampleText, employee, settings),
+                placement.ImagePath ?? ResolveImage(placement.BindingKey ?? definition.Key, employee, settings));
+            using var rendered = XImage.FromStream(png);
+            gfx.DrawImage(rendered, ex, ey, ew, eh);
         }
 
         DrawOptionalLines(gfx, x, y, settings, layout, side);
@@ -143,110 +135,6 @@ public sealed class PdfExportService
     private static void DrawPlacementRectangle(XGraphics gfx, XPen pen, double x, double y, ElementPlacement p) =>
         gfx.DrawRectangle(pen, x + Mm(p.XMm), y + Mm(p.YMm), Mm(p.WidthMm), Mm(p.HeightMm));
 
-    private static void DrawStyledText(XGraphics gfx, string text, double x, double y, double width, double height, ElementPlacement p)
-    {
-        var fontStyle = p.Bold ? XFontStyleEx.Bold : XFontStyleEx.Regular;
-        var font = new XFont(MapFontFamily(p.FontFamilyKey), p.FontSizePt, fontStyle);
-
-        if (p.ShadowEnabled)
-        {
-            var shadowColor = ParseColor(p.ShadowColor, p.ShadowOpacity);
-            DrawWrappedText(gfx, text, font, new XSolidBrush(shadowColor),
-                x + Mm(p.ShadowDxMm), y + Mm(p.ShadowDyMm), width, height, p.Alignment);
-        }
-
-        if (p.TextOutlineEnabled)
-        {
-            var outlineBrush = new XSolidBrush(ParseColor(p.TextOutlineColor));
-            var offset = Math.Max(0.15, p.TextOutlineWidthPt);
-            foreach (var (dx, dy) in new[]
-                     {
-                         (-offset, -offset), (0d, -offset), (offset, -offset),
-                         (-offset, 0d), (offset, 0d),
-                         (-offset, offset), (0d, offset), (offset, offset)
-                     })
-            {
-                DrawWrappedText(gfx, text, font, outlineBrush, x + dx, y + dy, width, height, p.Alignment);
-            }
-        }
-
-        var mainBrush = new XSolidBrush(ParseColor(p.TextColor));
-        var lines = DrawWrappedText(gfx, text, font, mainBrush, x, y, width, height, p.Alignment);
-
-        if (p.UnderlineEnabled && lines.Count > 0)
-        {
-            var underlinePen = new XPen(ParseColor(p.UnderlineColor), p.UnderlineThicknessPt);
-            var first = lines[0];
-            var textWidth = gfx.MeasureString(first, font).Width;
-            var underlineWidth = p.UnderlineWidthMode == IdUnderlineWidthMode.Element ? width : Math.Min(width, textWidth);
-            var startX = p.Alignment switch
-            {
-                IdTextAlignment.Center => x + (width - underlineWidth) / 2,
-                IdTextAlignment.Right => x + width - underlineWidth,
-                _ => x
-            };
-            var lineY = y + Math.Min(height - 1, font.GetHeight() + Mm(p.UnderlineOffsetMm));
-            gfx.DrawLine(underlinePen, startX, lineY, startX + underlineWidth, lineY);
-        }
-    }
-
-    private static List<string> DrawWrappedText(XGraphics gfx, string text, XFont font, XBrush brush,
-        double x, double y, double width, double height, IdTextAlignment alignment)
-    {
-        var lines = Wrap(gfx, text, font, width);
-        var lineHeight = font.GetHeight() * 1.08;
-        var maxLines = Math.Max(1, (int)Math.Floor(height / Math.Max(1, lineHeight)));
-        if (lines.Count > maxLines) lines = lines.Take(maxLines).ToList();
-
-        var format = new XStringFormat
-        {
-            Alignment = alignment switch
-            {
-                IdTextAlignment.Center => XStringAlignment.Center,
-                IdTextAlignment.Right => XStringAlignment.Far,
-                _ => XStringAlignment.Near
-            },
-            LineAlignment = XLineAlignment.Near
-        };
-
-        for (var i = 0; i < lines.Count; i++)
-        {
-            gfx.DrawString(lines[i], font, brush, new XRect(x, y + i * lineHeight, width, lineHeight), format);
-        }
-        return lines;
-    }
-
-    private static List<string> Wrap(XGraphics gfx, string text, XFont font, double maxWidth)
-    {
-        var result = new List<string>();
-        foreach (var paragraph in text.Replace("\r", string.Empty).Split('\n'))
-        {
-            if (string.IsNullOrWhiteSpace(paragraph))
-            {
-                result.Add(string.Empty);
-                continue;
-            }
-
-            var words = paragraph.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var current = string.Empty;
-            foreach (var word in words)
-            {
-                var candidate = string.IsNullOrEmpty(current) ? word : current + " " + word;
-                if (gfx.MeasureString(candidate, font).Width <= maxWidth || string.IsNullOrEmpty(current))
-                {
-                    current = candidate;
-                }
-                else
-                {
-                    result.Add(current);
-                    current = word;
-                }
-            }
-            if (!string.IsNullOrEmpty(current)) result.Add(current);
-        }
-        return result;
-    }
-
     private static bool TryDrawImage(XGraphics gfx, string? path, double x, double y, double width, double height)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return false;
@@ -302,31 +190,6 @@ public sealed class PdfExportService
             return parsed.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture);
 
         return "–";
-    }
-
-    private static string MapFontFamily(string key) => key.ToLowerInvariant() switch
-    {
-        "serif" => "Times New Roman",
-        "monospace" => "Consolas",
-        _ => "Arial"
-    };
-
-    private static XColor ParseColor(string? value, double opacity = 1)
-    {
-        try
-        {
-            var hex = (value ?? "#000000").Trim().TrimStart('#');
-            if (hex.Length != 6) return XColors.Black;
-            var r = Convert.ToInt32(hex[..2], 16);
-            var g = Convert.ToInt32(hex.Substring(2, 2), 16);
-            var b = Convert.ToInt32(hex.Substring(4, 2), 16);
-            var a = (int)Math.Round(Math.Clamp(opacity, 0, 1) * 255);
-            return XColor.FromArgb(a, r, g, b);
-        }
-        catch
-        {
-            return XColors.Black;
-        }
     }
 
     private static double Mm(double value) => value * PointsPerMm;

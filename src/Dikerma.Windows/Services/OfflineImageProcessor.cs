@@ -9,40 +9,16 @@ public sealed class OfflineImageProcessor
 
     public OfflineImageProcessor(AssetService assets) => _assets = assets;
 
-    public string CleanPhotoToWhite(string inputPath)
+    public string CleanPhotoToWhite(string inputPath) => CleanBackground(inputPath, true, 75, 20);
+
+    public string CleanBackground(string inputPath, bool white, double tolerance, double feather)
     {
         var bitmap = LoadBgra32(inputPath);
-        var width = bitmap.PixelWidth;
-        var height = bitmap.PixelHeight;
-        var stride = width * 4;
-        var pixels = new byte[stride * height];
-        bitmap.CopyPixels(pixels, stride, 0);
-
+        var width = bitmap.PixelWidth; var height = bitmap.PixelHeight; var stride = width * 4;
+        var pixels = new byte[checked(stride * height)]; bitmap.CopyPixels(pixels, stride, 0);
         var background = EstimateCornerBackground(pixels, width, height, stride);
-        const double threshold = 92;
-
-        for (var y = 0; y < height; y++)
-        {
-            for (var x = 0; x < width; x++)
-            {
-                var i = y * stride + x * 4;
-                var b = pixels[i];
-                var g = pixels[i + 1];
-                var r = pixels[i + 2];
-                var distance = ColorDistance(r, g, b, background.R, background.G, background.B);
-
-                if (distance < threshold)
-                {
-                    var blend = Math.Clamp((threshold - distance) / 32.0, 0, 1);
-                    pixels[i] = (byte)Math.Round(b + (255 - b) * blend);
-                    pixels[i + 1] = (byte)Math.Round(g + (255 - g) * blend);
-                    pixels[i + 2] = (byte)Math.Round(r + (255 - r) * blend);
-                }
-                pixels[i + 3] = 255;
-            }
-        }
-
-        var output = _assets.CreateOutputPath("photos-clean", ".png");
+        BackgroundMask.Apply(pixels, width, height, background.R, background.G, background.B, white, tolerance, feather);
+        var output = _assets.CreateOutputPath("background-clean", ".png");
         SavePng(pixels, width, height, stride, bitmap.DpiX, bitmap.DpiY, output);
         return output;
     }

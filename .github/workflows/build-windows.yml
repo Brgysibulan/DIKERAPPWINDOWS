@@ -42,6 +42,9 @@ jobs:
       - name: Build
         run: dotnet build src/Dikerma.Windows/Dikerma.Windows.csproj -c Release --no-restore
 
+      - name: Test Studio persistence, rendering, crop and PDF
+        run: dotnet run --project tests/Dikerma.Smoke/Dikerma.Smoke.csproj -c Release
+
       - name: Publish self-contained Windows x64
         run: dotnet publish src/Dikerma.Windows/Dikerma.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
 
