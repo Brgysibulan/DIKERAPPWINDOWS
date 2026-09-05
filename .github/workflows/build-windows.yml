@@ -12,6 +12,9 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    env:
+      WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
+      WINDOWS_CODESIGN_PFX_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PFX_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -36,6 +39,22 @@ jobs:
           }
           Write-Host "Offline-only verification passed."
 
+      - name: Read release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content 'src/Dikerma.Windows/Dikerma.Windows.csproj'
+          $version = $project.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'Project Version is missing.' }
+
+          $hasCert = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_PFX_BASE64) -and
+                     -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_PFX_PASSWORD)
+          $signing = if ($hasCert) { 'SIGNED' } else { 'UNSIGNED' }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "signing=$signing" >> $env:GITHUB_OUTPUT
+          Write-Host "Release: DIKERMA v$version ($signing)"
+
       - name: Restore
         run: dotnet restore src/Dikerma.Windows/Dikerma.Windows.csproj
 
@@ -45,9 +64,59 @@ jobs:
       - name: Publish self-contained Windows x64
         run: dotnet publish src/Dikerma.Windows/Dikerma.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
 
+      - name: Authenticode sign DIKERMA.exe
+        if: env.WINDOWS_CODESIGN_PFX_BASE64 != '' && env.WINDOWS_CODESIGN_PFX_PASSWORD != ''
+        shell: pwsh
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'dikerma-codesign.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
+
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe was not found on the Windows runner.' }
+
+          & $signtool.FullName sign /fd SHA256 /f $pfxPath /p $env:WINDOWS_CODESIGN_PFX_PASSWORD /tr http://timestamp.digicert.com /td SHA256 'publish\DIKERMA.exe'
+          if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed with exit code $LASTEXITCODE." }
+
+          Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+
+      - name: Verify Authenticode signature
+        if: env.WINDOWS_CODESIGN_PFX_BASE64 != '' && env.WINDOWS_CODESIGN_PFX_PASSWORD != ''
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature 'publish\DIKERMA.exe'
+          $signature | Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
+          if ($signature.Status -ne 'Valid') {
+            throw "DIKERMA.exe signature is not valid: $($signature.Status)"
+          }
+
+      - name: Mark unsigned build clearly
+        if: env.WINDOWS_CODESIGN_PFX_BASE64 == '' || env.WINDOWS_CODESIGN_PFX_PASSWORD == ''
+        shell: pwsh
+        run: |
+          @'
+          DIKERMA WINDOWS BUILD - UNSIGNED
+
+          Publisher metadata inside the file is JOSHUAPUDI, but this executable does not
+          contain a trusted Authenticode signature. Microsoft Defender SmartScreen may
+          therefore display "Unknown publisher" on some PCs.
+
+          A trusted code-signing certificate is required before Windows can verify the
+          publisher identity cryptographically.
+          '@ | Set-Content -Path 'publish\UNSIGNED-BUILD.txt' -Encoding UTF8
+
+      - name: Generate SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash 'publish\DIKERMA.exe' -Algorithm SHA256).Hash
+          "$hash  DIKERMA.exe" | Set-Content -Path 'publish\SHA256SUMS.txt' -Encoding ASCII
+          Write-Host "DIKERMA.exe SHA-256: $hash"
+
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
         with:
-          name: DIKERMA-Windows-x64
+          name: DIKERMA-Windows-x64-v${{ steps.meta.outputs.version }}-${{ steps.meta.outputs.signing }}
           path: publish/**
           if-no-files-found: error
