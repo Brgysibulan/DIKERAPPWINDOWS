@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -31,6 +32,9 @@ public partial class MainWindow : Window
     private Point _dragStartPoint;
     private double _dragStartXmm;
     private double _dragStartYmm;
+    private string? _resizingKey;
+    private double _resizeStartWidthMm;
+    private double _resizeStartHeightMm;
 
     public MainWindow()
     {
@@ -231,6 +235,10 @@ public partial class MainWindow : Window
     }
 
     private IdLayoutSide CurrentSide => LayoutSideComboBox.SelectedItem is IdLayoutSide side ? side : IdLayoutSide.Front;
+    private IEnumerable<LayoutElementDefinition> CurrentDefinitions() =>
+        LayoutCatalog.ForSide(CurrentSide).Concat(_layout.CustomElements.Where(x => x.Side == CurrentSide).OrderBy(x => x.ZIndex).Select(x => x.ToDefinition()));
+    private LayoutElementDefinition? FindDefinition(string key) => LayoutCatalog.Find(key) ?? _layout.CustomElements.FirstOrDefault(x => x.Key == key)?.ToDefinition();
+    private CustomLayoutElement? SelectedCustom => _selectedLayoutElement is null ? null : _layout.CustomElements.FirstOrDefault(x => x.Key == _selectedLayoutElement.Key);
 
     private void LayoutSideComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -242,7 +250,7 @@ public partial class MainWindow : Window
     private void RefreshLayoutElementList()
     {
         if (LayoutElementComboBox is null) return;
-        var items = LayoutCatalog.ForSide(CurrentSide).ToList();
+        var items = CurrentDefinitions().ToList();
         LayoutElementComboBox.ItemsSource = items;
         if (items.Count > 0) LayoutElementComboBox.SelectedIndex = 0;
     }
@@ -261,7 +269,7 @@ public partial class MainWindow : Window
         DrawPreviewBackground();
         DrawGuides();
 
-        foreach (var definition in LayoutCatalog.ForSide(CurrentSide))
+        foreach (var definition in CurrentDefinitions())
         {
             var placement = _layout.Get(definition.Key);
             if (!placement.Visible && definition.Key != _selectedLayoutElement?.Key) continue;
@@ -269,7 +277,7 @@ public partial class MainWindow : Window
             LayoutCanvas.Children.Add(wrapper);
             Canvas.SetLeft(wrapper, placement.XMm * CanvasScale);
             Canvas.SetTop(wrapper, placement.YMm * CanvasScale);
-            Panel.SetZIndex(wrapper, definition.Key == _selectedLayoutElement?.Key ? 20 : 10);
+            Panel.SetZIndex(wrapper, SelectedZIndex(definition.Key) + (definition.Key == _selectedLayoutElement?.Key ? 1000 : 0));
         }
     }
 
@@ -336,9 +344,19 @@ public partial class MainWindow : Window
     private FrameworkElement CreateElementVisual(LayoutElementDefinition definition, ElementPlacement p)
     {
         FrameworkElement child;
-        if (definition.Kind == IdLayoutKind.Image)
+        var custom = _layout.CustomElements.FirstOrDefault(x => x.Key == definition.Key);
+        if (definition.Kind == IdLayoutKind.Rectangle || definition.Kind == IdLayoutKind.Ellipse)
         {
-            var path = ResolvePreviewImage(definition.Key);
+            Shape shape = definition.Kind == IdLayoutKind.Ellipse ? new Ellipse() : new Rectangle();
+            shape.Fill = BrushFromHex(custom?.FillColor ?? "#FFFFFF");
+            shape.Stroke = BrushFromHex(custom?.BorderColor ?? "#00522D");
+            shape.StrokeThickness = (custom?.BorderWidthPt ?? 1) * 1.25;
+            shape.Opacity = custom?.Opacity ?? 1;
+            child = shape;
+        }
+        else if (definition.Kind == IdLayoutKind.Image)
+        {
+            var path = custom?.ImagePath ?? ResolvePreviewImage(definition.Key);
             if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
             {
                 try { child = new WpfImage { Source = OfflineImageProcessor.LoadPreview(path), Stretch = Stretch.Fill }; }
@@ -350,7 +368,7 @@ public partial class MainWindow : Window
         {
             var tb = new TextBlock
             {
-                Text = ResolvePreviewText(definition),
+                Text = custom?.Content ?? ResolvePreviewText(definition),
                 Foreground = BrushFromHex(p.TextColor),
                 FontFamily = new FontFamily(MapPreviewFont(p.FontFamilyKey)),
                 FontSize = p.FontSizePt * (25.4 / 72.0) * CanvasScale,
@@ -379,18 +397,25 @@ public partial class MainWindow : Window
         }
 
         var selected = definition.Key == _selectedLayoutElement?.Key;
-        var wrapper = new Border
+        var wrapper = new Grid
         {
             Width = p.WidthMm * CanvasScale,
             Height = p.HeightMm * CanvasScale,
-            BorderBrush = selected ? Brushes.Gold : Brushes.Transparent,
-            BorderThickness = selected ? new Thickness(1.5) : new Thickness(0.5),
             Background = Brushes.Transparent,
-            Child = child,
             Tag = definition.Key,
             Cursor = _layout.Locked ? Cursors.Arrow : Cursors.SizeAll,
             ToolTip = definition.DisplayName
         };
+        wrapper.Children.Add(child);
+        wrapper.Children.Add(new Border { BorderBrush = selected ? Brushes.Gold : Brushes.Transparent, BorderThickness = new Thickness(selected ? 1.5 : 0.5), IsHitTestVisible = false });
+        if (selected && !_layout.Locked)
+        {
+            var resize = new Thumb { Width = 14, Height = 14, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Cursor = Cursors.SizeNWSE, Background = Brushes.Gold, Tag = definition.Key };
+            resize.DragStarted += ResizeThumb_DragStarted;
+            resize.DragDelta += ResizeThumb_DragDelta;
+            resize.DragCompleted += ResizeThumb_DragCompleted;
+            wrapper.Children.Add(resize);
+        }
         wrapper.MouseLeftButtonDown += LayoutVisual_MouseLeftButtonDown;
         wrapper.MouseMove += LayoutVisual_MouseMove;
         wrapper.MouseLeftButtonUp += LayoutVisual_MouseLeftButtonUp;
@@ -408,9 +433,9 @@ public partial class MainWindow : Window
     private void LayoutVisual_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement visual || visual.Tag is not string key) return;
-        var definition = LayoutCatalog.Find(key);
+        var definition = FindDefinition(key);
         if (definition is null) return;
-        LayoutElementComboBox.SelectedItem = LayoutCatalog.ForSide(CurrentSide).FirstOrDefault(x => x.Key == key);
+        LayoutElementComboBox.SelectedItem = CurrentDefinitions().FirstOrDefault(x => x.Key == key);
         _selectedLayoutElement = definition;
         LoadLayoutProperties();
         RefreshLayoutPreview();
@@ -448,11 +473,114 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private int SelectedZIndex(string key) => _layout.CustomElements.FirstOrDefault(x => x.Key == key)?.ZIndex ?? 10;
+
+    private void ResizeThumb_DragStarted(object sender, DragStartedEventArgs e)
+    {
+        if (sender is not Thumb { Tag: string key } || _layout.Locked) return;
+        _resizingKey = key;
+        var p = _layout.Get(key);
+        _resizeStartWidthMm = p.WidthMm;
+        _resizeStartHeightMm = p.HeightMm;
+        e.Handled = true;
+    }
+
+    private void ResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (_resizingKey is null || _layout.Locked) return;
+        var p = _layout.Get(_resizingKey);
+        p.WidthMm = _resizeStartWidthMm + e.HorizontalChange / CanvasScale;
+        p.HeightMm = _resizeStartHeightMm + e.VerticalChange / CanvasScale;
+        p.Clamp();
+        _resizeStartWidthMm = p.WidthMm;
+        _resizeStartHeightMm = p.HeightMm;
+        if (sender is Thumb { Parent: FrameworkElement wrapper })
+        {
+            wrapper.Width = p.WidthMm * CanvasScale;
+            wrapper.Height = p.HeightMm * CanvasScale;
+        }
+        LoadLayoutProperties();
+        e.Handled = true;
+    }
+
+    private void ResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        _resizingKey = null;
+        RefreshLayoutPreview();
+        e.Handled = true;
+    }
+
+    private void AddTextElement_Click(object sender, RoutedEventArgs e) => AddCustomElement(IdLayoutKind.Text, "Custom text", "EDIT TEXT");
+    private void AddRectangleElement_Click(object sender, RoutedEventArgs e) => AddCustomElement(IdLayoutKind.Rectangle, "Rectangle", string.Empty);
+    private void AddEllipseElement_Click(object sender, RoutedEventArgs e) => AddCustomElement(IdLayoutKind.Ellipse, "Ellipse", string.Empty);
+
+    private void AddImageElement_Click(object sender, RoutedEventArgs e)
+    {
+        var source = ChooseImage();
+        if (source is null) return;
+        try
+        {
+            var saved = _assets.Import(source, "design-assets");
+            AddCustomElement(IdLayoutKind.Image, Path.GetFileNameWithoutExtension(source), string.Empty, saved);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    private void AddCustomElement(IdLayoutKind kind, string name, string content, string? imagePath = null)
+    {
+        if (_layout.Locked) { MessageBox.Show("Unlock the layout before adding elements.", "DIKERMA"); return; }
+        var custom = new CustomLayoutElement { Side = CurrentSide, Kind = kind, Name = name, Content = content, ImagePath = imagePath, ZIndex = (_layout.CustomElements.Count == 0 ? 100 : _layout.CustomElements.Max(x => x.ZIndex) + 1) };
+        _layout.CustomElements.Add(custom);
+        var definition = custom.ToDefinition();
+        _layout.Elements[custom.Key] = LayoutCatalog.DefaultPlacement(definition);
+        _selectedLayoutElement = definition;
+        RefreshLayoutElementList();
+        LayoutElementComboBox.SelectedItem = LayoutElementComboBox.Items.Cast<LayoutElementDefinition>().FirstOrDefault(x => x.Key == custom.Key);
+        RefreshLayoutPreview();
+        SetStatus($"Added {name} • drag or resize it with the mouse");
+    }
+
+    private void DuplicateElement_Click(object sender, RoutedEventArgs e)
+    {
+        var source = SelectedCustom;
+        if (source is null || _layout.Locked) return;
+        var copy = new CustomLayoutElement { Side = source.Side, Kind = source.Kind, Name = source.Name + " copy", Content = source.Content, ImagePath = source.ImagePath, FillColor = source.FillColor, BorderColor = source.BorderColor, BorderWidthPt = source.BorderWidthPt, Opacity = source.Opacity, ZIndex = source.ZIndex + 1 };
+        _layout.CustomElements.Add(copy);
+        var p = _layout.Get(source.Key).Clone(); p.XMm += 2; p.YMm += 2; p.Clamp();
+        _layout.Elements[copy.Key] = p;
+        _selectedLayoutElement = copy.ToDefinition();
+        RefreshLayoutElementList();
+        LayoutElementComboBox.SelectedItem = LayoutElementComboBox.Items.Cast<LayoutElementDefinition>().FirstOrDefault(x => x.Key == copy.Key);
+        RefreshLayoutPreview();
+    }
+
+    private void DeleteElement_Click(object sender, RoutedEventArgs e)
+    {
+        var custom = SelectedCustom;
+        if (custom is null || _layout.Locked) return;
+        if (MessageBox.Show($"Delete {custom.Name}?", "DIKERMA", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        _layout.CustomElements.Remove(custom); _layout.Elements.Remove(custom.Key); _selectedLayoutElement = null;
+        RefreshLayoutElementList(); RefreshLayoutPreview();
+    }
+
+    private void BringForward_Click(object sender, RoutedEventArgs e) { if (SelectedCustom is { } c) { c.ZIndex++; RefreshLayoutPreview(); } }
+    private void SendBackward_Click(object sender, RoutedEventArgs e) { if (SelectedCustom is { } c) { c.ZIndex--; RefreshLayoutPreview(); } }
+    private void PickShapeFill_Click(object sender, RoutedEventArgs e) => PickColor(ShapeFillTextBox);
+    private void PickShapeBorder_Click(object sender, RoutedEventArgs e) => PickColor(ShapeBorderTextBox);
+
     private void LoadLayoutProperties()
     {
         if (_selectedLayoutElement is null || LayoutXTextBox is null) return;
         var p = _layout.Get(_selectedLayoutElement.Key);
         SelectedElementText.Text = _selectedLayoutElement.DisplayName;
+        var custom = SelectedCustom;
+        CustomElementPanel.Visibility = custom is null ? Visibility.Collapsed : Visibility.Visible;
+        if (custom is not null)
+        {
+            CustomContentTextBox.Text = custom.Kind == IdLayoutKind.Text ? custom.Content : custom.Name;
+            ShapeFillTextBox.Text = custom.FillColor;
+            ShapeBorderTextBox.Text = custom.BorderColor;
+        }
         LayoutXTextBox.Text = F(p.XMm); LayoutYTextBox.Text = F(p.YMm);
         LayoutWidthTextBox.Text = F(p.WidthMm); LayoutHeightTextBox.Text = F(p.HeightMm);
         LayoutFontSizeTextBox.Text = F(p.FontSizePt);
@@ -499,6 +627,13 @@ public partial class MainWindow : Window
         p.ShadowColor = NormalizeHex(LayoutShadowColorTextBox.Text, p.ShadowColor);
         p.ShadowOpacity = Read(LayoutShadowOpacityTextBox, p.ShadowOpacity);
         p.ShadowDxMm = Read(LayoutShadowXTextBox, p.ShadowDxMm); p.ShadowDyMm = Read(LayoutShadowYTextBox, p.ShadowDyMm);
+        if (SelectedCustom is { } custom)
+        {
+            if (custom.Kind == IdLayoutKind.Text) custom.Content = CustomContentTextBox.Text;
+            else custom.Name = CustomContentTextBox.Text.Trim();
+            custom.FillColor = NormalizeHex(ShapeFillTextBox.Text, custom.FillColor);
+            custom.BorderColor = NormalizeHex(ShapeBorderTextBox.Text, custom.BorderColor);
+        }
         ApplySnap(p); p.Clamp();
         LoadLayoutProperties(); RefreshLayoutPreview(); SetStatus("Layout element updated (save placement to persist)");
     }
@@ -555,7 +690,7 @@ public partial class MainWindow : Window
     private void ResetSide_Click(object sender, RoutedEventArgs e)
     {
         if (_layout.Locked) return;
-        foreach (var def in LayoutCatalog.ForSide(CurrentSide)) _layout.Elements[def.Key] = LayoutCatalog.DefaultPlacement(def);
+        foreach (var def in CurrentDefinitions()) _layout.Elements[def.Key] = LayoutCatalog.DefaultPlacement(def);
         LoadLayoutProperties(); RefreshLayoutPreview();
     }
 

@@ -1,7 +1,7 @@
 namespace Dikerma.Windows.Models;
 
 public enum IdLayoutSide { Front, Back }
-public enum IdLayoutKind { Text, Image }
+public enum IdLayoutKind { Text, Image, Rectangle, Ellipse }
 public enum IdTextAlignment { Left, Center, Right }
 public enum IdUnderlineWidthMode { Text, Element }
 
@@ -68,20 +68,42 @@ public sealed record LayoutElementDefinition(
 
 public sealed class LayoutProfile
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
     public bool Locked { get; set; }
     public double GridSizeMm { get; set; } = 1;
     public bool SnapToGrid { get; set; } = true;
     public Dictionary<string, ElementPlacement> Elements { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<CustomLayoutElement> CustomElements { get; set; } = new();
 
     public ElementPlacement Get(string key)
     {
         if (!Elements.TryGetValue(key, out var placement))
         {
-            var definition = LayoutCatalog.Find(key) ?? throw new InvalidOperationException($"Unknown layout element: {key}");
-            placement = LayoutCatalog.DefaultPlacement(definition);
+            var definition = LayoutCatalog.Find(key);
+            placement = definition is null
+                ? new ElementPlacement { XMm = 10, YMm = 10, WidthMm = 30, HeightMm = 10, FontSizePt = 10 }
+                : LayoutCatalog.DefaultPlacement(definition);
             Elements[key] = placement;
         }
         return placement;
     }
+}
+
+public sealed class CustomLayoutElement
+{
+    public string Key { get; set; } = $"custom_{Guid.NewGuid():N}";
+    public IdLayoutSide Side { get; set; }
+    public string Name { get; set; } = "New element";
+    public IdLayoutKind Kind { get; set; } = IdLayoutKind.Text;
+    public string Content { get; set; } = "EDIT TEXT";
+    public string? ImagePath { get; set; }
+    public string FillColor { get; set; } = "#FFFFFF";
+    public string BorderColor { get; set; } = "#00522D";
+    public double BorderWidthPt { get; set; } = 1;
+    public double Opacity { get; set; } = 1;
+    public int ZIndex { get; set; } = 100;
+
+    public LayoutElementDefinition ToDefinition() => new(
+        Key, Side, Name, Kind, 10, 10, 30, 10, 10, IdTextAlignment.Center,
+        "#000000", false, Content);
 }

@@ -19,7 +19,11 @@ public sealed class OfflineImageProcessor
         bitmap.CopyPixels(pixels, stride, 0);
 
         var background = EstimateCornerBackground(pixels, width, height, stride);
-        const double threshold = 92;
+        // Only replace pixels connected to the outer edge. This avoids punching holes
+        // in clothing, eyes, logos, or hair that happen to resemble the backdrop.
+        const double threshold = 82;
+        const double feather = 30;
+        var backgroundMask = BuildEdgeConnectedMask(pixels, width, height, stride, background, threshold + feather);
 
         for (var y = 0; y < height; y++)
         {
@@ -31,9 +35,9 @@ public sealed class OfflineImageProcessor
                 var r = pixels[i + 2];
                 var distance = ColorDistance(r, g, b, background.R, background.G, background.B);
 
-                if (distance < threshold)
+                if (backgroundMask[y * width + x] && distance < threshold + feather)
                 {
-                    var blend = Math.Clamp((threshold - distance) / 32.0, 0, 1);
+                    var blend = Math.Clamp((threshold + feather - distance) / feather, 0, 1);
                     pixels[i] = (byte)Math.Round(b + (255 - b) * blend);
                     pixels[i + 1] = (byte)Math.Round(g + (255 - g) * blend);
                     pixels[i + 2] = (byte)Math.Round(r + (255 - r) * blend);
@@ -45,6 +49,36 @@ public sealed class OfflineImageProcessor
         var output = _assets.CreateOutputPath("photos-clean", ".png");
         SavePng(pixels, width, height, stride, bitmap.DpiX, bitmap.DpiY, output);
         return output;
+    }
+
+    private static bool[] BuildEdgeConnectedMask(byte[] pixels, int width, int height, int stride,
+        (byte R, byte G, byte B) background, double threshold)
+    {
+        var mask = new bool[width * height];
+        var queue = new Queue<(int X, int Y)>();
+
+        void Seed(int x, int y)
+        {
+            var index = y * width + x;
+            if (mask[index]) return;
+            var pixel = y * stride + x * 4;
+            if (ColorDistance(pixels[pixel + 2], pixels[pixel + 1], pixels[pixel], background.R, background.G, background.B) > threshold) return;
+            mask[index] = true;
+            queue.Enqueue((x, y));
+        }
+
+        for (var x = 0; x < width; x++) { Seed(x, 0); Seed(x, height - 1); }
+        for (var y = 1; y < height - 1; y++) { Seed(0, y); Seed(width - 1, y); }
+
+        while (queue.Count > 0)
+        {
+            var (x, y) = queue.Dequeue();
+            if (x > 0) Seed(x - 1, y);
+            if (x + 1 < width) Seed(x + 1, y);
+            if (y > 0) Seed(x, y - 1);
+            if (y + 1 < height) Seed(x, y + 1);
+        }
+        return mask;
     }
 
     public string CleanSignatureToTransparent(string inputPath)

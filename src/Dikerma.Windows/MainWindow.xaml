@@ -147,9 +147,20 @@
                     </Grid>
 
                     <Border Grid.Row="1" Grid.Column="0" Background="#E9EEE9" CornerRadius="8" Padding="12" Margin="0,0,14,0">
-                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
-                            <Canvas x:Name="LayoutCanvas" Width="425" Height="575" Background="White" ClipToBounds="True" />
-                        </Viewbox>
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <WrapPanel Margin="0,0,0,8">
+                                <Button Content="＋ Text" Click="AddTextElement_Click"/>
+                                <Button Content="＋ PNG / Image" Click="AddImageElement_Click"/>
+                                <Button Content="▭ Rectangle" Click="AddRectangleElement_Click"/>
+                                <Button Content="○ Ellipse" Click="AddEllipseElement_Click"/>
+                                <Button Content="Duplicate" Click="DuplicateElement_Click"/>
+                                <Button Content="Delete" Click="DeleteElement_Click"/>
+                            </WrapPanel>
+                            <Viewbox Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly">
+                                <Canvas x:Name="LayoutCanvas" Width="425" Height="575" Background="White" ClipToBounds="True" />
+                            </Viewbox>
+                        </Grid>
                     </Border>
 
                     <Border Grid.Row="1" Grid.Column="1" Background="White" CornerRadius="8" Padding="14" BorderBrush="#DCE5DF" BorderThickness="1">
@@ -157,6 +168,15 @@
                             <StackPanel>
                                 <TextBlock Text="Selected element" FontSize="18" FontWeight="SemiBold" />
                                 <TextBlock x:Name="SelectedElementText" Foreground="#5B6C63" Margin="0,0,0,10" />
+                                <StackPanel x:Name="CustomElementPanel">
+                                    <TextBlock Text="Element content / name"/><TextBox x:Name="CustomContentTextBox" AcceptsReturn="True" TextWrapping="Wrap"/>
+                                    <UniformGrid Columns="2">
+                                        <Button Content="Bring forward" Click="BringForward_Click"/>
+                                        <Button Content="Send backward" Click="SendBackward_Click"/>
+                                    </UniformGrid>
+                                    <TextBlock Text="Shape fill"/><DockPanel><Button Content="Pick…" DockPanel.Dock="Right" Margin="6,3,3,3" Click="PickShapeFill_Click"/><TextBox x:Name="ShapeFillTextBox"/></DockPanel>
+                                    <TextBlock Text="Shape border"/><DockPanel><Button Content="Pick…" DockPanel.Dock="Right" Margin="6,3,3,3" Click="PickShapeBorder_Click"/><TextBox x:Name="ShapeBorderTextBox"/></DockPanel>
+                                </StackPanel>
                                 <UniformGrid Columns="2">
                                     <StackPanel Margin="0,0,6,0"><TextBlock Text="X (mm)"/><TextBox x:Name="LayoutXTextBox"/></StackPanel>
                                     <StackPanel Margin="6,0,0,0"><TextBlock Text="Y (mm)"/><TextBox x:Name="LayoutYTextBox"/></StackPanel>

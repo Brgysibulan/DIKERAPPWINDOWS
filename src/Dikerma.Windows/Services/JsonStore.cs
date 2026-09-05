@@ -27,6 +27,8 @@ public sealed class JsonStore
             return LayoutCatalog.CreateDefaultProfile();
         }
 
+        profile.CustomElements ??= new List<CustomLayoutElement>();
+
         foreach (var definition in LayoutCatalog.Elements)
         {
             if (!profile.Elements.ContainsKey(definition.Key))

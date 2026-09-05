@@ -79,6 +79,33 @@ public sealed class PdfExportService
             }
         }
 
+
+        foreach (var custom in layout.CustomElements.Where(item => item.Side == side).OrderBy(item => item.ZIndex))
+        {
+            var placement = layout.Get(custom.Key);
+            if (!placement.Visible) continue;
+            var ex = x + Mm(placement.XMm);
+            var ey = y + Mm(placement.YMm);
+            var ew = Mm(placement.WidthMm);
+            var eh = Mm(placement.HeightMm);
+
+            if (custom.Kind == IdLayoutKind.Image)
+            {
+                TryDrawImage(gfx, custom.ImagePath, ex, ey, ew, eh);
+            }
+            else if (custom.Kind == IdLayoutKind.Text)
+            {
+                DrawStyledText(gfx, custom.Content, ex, ey, ew, eh, placement);
+            }
+            else
+            {
+                var fill = new XSolidBrush(ParseColor(custom.FillColor, custom.Opacity));
+                var pen = new XPen(ParseColor(custom.BorderColor, custom.Opacity), Math.Max(0.1, custom.BorderWidthPt));
+                if (custom.Kind == IdLayoutKind.Ellipse) gfx.DrawEllipse(pen, fill, ex, ey, ew, eh);
+                else gfx.DrawRectangle(pen, fill, ex, ey, ew, eh);
+            }
+        }
+
         DrawOptionalLines(gfx, x, y, settings, layout, side);
 
         if (settings.OuterCutGuideEnabled)
