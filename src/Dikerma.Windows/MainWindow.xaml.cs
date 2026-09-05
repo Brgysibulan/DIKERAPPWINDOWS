@@ -521,7 +521,7 @@ public partial class MainWindow : Window
         try
         {
             var saved = _assets.Import(source, "design-assets");
-            AddCustomElement(IdLayoutKind.Image, Path.GetFileNameWithoutExtension(source), string.Empty, saved);
+            AddCustomElement(IdLayoutKind.Image, System.IO.Path.GetFileNameWithoutExtension(source), string.Empty, saved);
         }
         catch (Exception ex) { ShowError(ex); }
     }
