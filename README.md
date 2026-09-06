@@ -1,5 +1,24 @@
 # DIKERAPPWINDOWS
 
+## Windows v0.2.1 — Advanced BG Eraser and developer branding
+
+Developed by **Joshua Apal Pudi**. The app displays this credit in its sidebar and author metadata. The white **D** on a refined green tile is shared by the executable, window and sidebar, with icon sizes from 16 to 256 pixels.
+
+### Refine an individual photo or signature
+
+1. Open **Records**, select a record or start a new one, then choose a photo/signature.
+2. Click **Advanced BG Eraser • photo** or **Advanced BG Eraser • signature**.
+3. Adjust **Removal strength** and **Edge feather**, then click **Auto remove background**.
+4. Use **Erase brush** to remove leftovers or **Restore brush** to recover detail. Adjust brush radius and softness. Undo/Redo work per brush stroke; Reset returns to the imported original.
+5. Use **Fit image**, zoom buttons, or **Ctrl+mouse wheel** to inspect edges. **Show original** lets you compare without changing the edited mask.
+6. Choose white output or uncheck it for transparent PNG. Click **Apply image**, then **Save Record**.
+
+New imports retain their original source separately, so reopening the eraser starts from that original. Old records without retained originals use the existing image; re-import the source if detail was already removed. Cancel leaves the current record image unchanged. Photos default to white and signatures default to transparent. Original source files are never overwritten.
+
+Layout Studio also exposes **Advanced BG Eraser • brush / restore** inside its crop/image dialog. This produces a static image for the shared layout; use Records for individual portraits. Cropping remains separate from brush coordinates.
+
+The eraser uses adaptive border-color removal and manual mask refinement, entirely offline. It does not include an AI segmentation model; complex scenes need manual brushing. Inputs are limited to 16 megapixels, and undo history is capped according to image size. Updated smoke tests cover brush isolation, undo/redo, original transparency, PNG alpha output and editor initialization, in addition to existing Studio/PDF checks.
+
 Windows desktop port of the Barangay Sibulan **DIKERMA / Barangay ID Maker**.
 
 Android reference baseline: `Brgysibulan/dikerma` **v0.7.1** at commit `889ca191dadb131a56c10deadd3e6d5d65c2b7c7`.

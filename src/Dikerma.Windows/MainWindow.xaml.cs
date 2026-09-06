@@ -26,6 +26,8 @@ public partial class MainWindow : Window
     private AppSettingsModel _settings = new();
     private LayoutProfile _layout = LayoutCatalog.CreateDefaultProfile();
     private EmployeeRecord? _editingEmployee;
+    private string? _originalPhotoPath;
+    private string? _originalSignaturePath;
     private LayoutElementDefinition? _selectedLayoutElement;
     private FrameworkElement? _dragVisual;
     private Point _dragStartPoint;
@@ -69,6 +71,8 @@ public partial class MainWindow : Window
     {
         if (EmployeesGrid.SelectedItem is not EmployeeRecord employee) return;
         _editingEmployee = employee;
+        _originalPhotoPath = employee.OriginalPhotoPath ?? employee.PhotoPath;
+        _originalSignaturePath = employee.OriginalSignaturePath ?? employee.SignaturePath;
         FullNameTextBox.Text = employee.FullName;
         PositionTextBox.Text = employee.Position;
         ControlNumberTextBox.Text = employee.ControlNumber;
@@ -87,6 +91,8 @@ public partial class MainWindow : Window
     private void NewRecordForm()
     {
         _editingEmployee = null;
+        _originalPhotoPath = null;
+        _originalSignaturePath = null;
         EmployeesGrid.SelectedItem = null;
         FullNameTextBox.Clear();
         PositionTextBox.Clear();
@@ -127,6 +133,8 @@ public partial class MainWindow : Window
         employee.CivilStatus = CivilStatusTextBox.Text.Trim();
         employee.Status = GetSelectedStatus();
         employee.PhotoPath = NullIfBlank(PhotoPathTextBox.Text);
+        employee.OriginalPhotoPath = _originalPhotoPath;
+        employee.OriginalSignaturePath = _originalSignaturePath;
         employee.SignaturePath = NullIfBlank(SignaturePathTextBox.Text);
         employee.QrImagePath = NullIfBlank(QrPathTextBox.Text);
 
@@ -158,9 +166,10 @@ public partial class MainWindow : Window
         if (source is null) return;
         try
         {
-            PhotoPathTextBox.Text = PhotoKeepOriginalCheckBox.IsChecked == true
-                ? _assets.Import(source, "photos-original")
-                : _images.CleanPhotoToWhite(source);
+            var original = _assets.Import(source, "photos-original");
+            var photo = PhotoKeepOriginalCheckBox.IsChecked == true ? original : _images.CleanPhotoToWhite(original);
+            _originalPhotoPath = original;
+            PhotoPathTextBox.Text = photo;
             SetStatus("Photo imported");
         }
         catch (Exception ex) { ShowError(ex); }
@@ -172,9 +181,10 @@ public partial class MainWindow : Window
         if (source is null) return;
         try
         {
-            SignaturePathTextBox.Text = SignatureKeepOriginalCheckBox.IsChecked == true
-                ? _assets.Import(source, "signatures-original")
-                : _images.CleanSignatureToTransparent(source);
+            var original = _assets.Import(source, "signatures-original");
+            var signature = SignatureKeepOriginalCheckBox.IsChecked == true ? original : _images.CleanSignatureToTransparent(original);
+            _originalSignaturePath = original;
+            SignaturePathTextBox.Text = signature;
             SetStatus("Signature imported");
         }
         catch (Exception ex) { ShowError(ex); }
@@ -185,6 +195,23 @@ public partial class MainWindow : Window
         var source = ChooseImage();
         if (source is null) return;
         try { QrPathTextBox.Text = _assets.Import(source, "qr"); SetStatus("QR image imported"); }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    private void EraseRecordPhoto_Click(object sender, RoutedEventArgs e) => EditRecordImage(true);
+    private void EraseRecordSignature_Click(object sender, RoutedEventArgs e) => EditRecordImage(false);
+    private void EditRecordImage(bool photo)
+    {
+        var target = photo ? PhotoPathTextBox : SignaturePathTextBox;
+        var path = (photo ? _originalPhotoPath : _originalSignaturePath) ?? NullIfBlank(target.Text);
+        if (path is null) { SetStatus("Choose a photo or signature first"); return; }
+        try
+        {
+            var editor = new BackgroundEraserWindow(path, _images, white: photo) { Owner = this };
+            if (editor.ShowDialog() != true) return;
+            target.Text = editor.OutputPath ?? target.Text;
+            SetStatus("Image refined • click Save Record to keep it");
+        }
         catch (Exception ex) { ShowError(ex); }
     }
 
@@ -712,6 +739,6 @@ public partial class MainWindow : Window
     private static double Read(TextBox box, double fallback) => double.TryParse(box.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) ? value : fallback;
     private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string? NullIfBlank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
-    private void SetStatus(string text) => StatusText.Text = $"{text}\nOffline • Windows v0.2.0";
+    private void SetStatus(string text) => StatusText.Text = $"{text}\nOffline • Windows v0.2.1";
     private void ShowError(Exception ex) { SetStatus("Operation failed"); MessageBox.Show(ex.Message, "DIKERMA", MessageBoxButton.OK, MessageBoxImage.Error); }
 }

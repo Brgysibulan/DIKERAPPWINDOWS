@@ -15,7 +15,7 @@ public sealed class ImageToolsWindow : Window
     private readonly Border _preview = new() { Background = Brushes.LightGray, Padding = new Thickness(8) };
     private readonly Slider[] _crop = new Slider[4];
     private readonly Slider _tolerance = new() { Minimum = 10, Maximum = 160, Value = 75, TickFrequency = 10 };
-    private readonly Slider _feather = new() { Minimum = 1, Maximum = 60, Value = 20 };
+    private readonly Slider _feather = new() { Minimum = 0, Maximum = 5, Value = 3 };
     private readonly CheckBox _white = new() { Content = "Replace with white (unchecked = transparent)", IsChecked = true };
     private readonly Button _clean = new() { Content = "Preview background cleanup", Margin = new Thickness(0, 8, 0, 8) };
 
@@ -49,16 +49,30 @@ public sealed class ImageToolsWindow : Window
         _clean.Click += async (_, _) =>
         {
             _clean.IsEnabled = false;
+            panel.IsEnabled = false;
             var tolerance = _tolerance.Value; var feather = _feather.Value; var white = _white.IsChecked == true;
             try { ProcessedPath = await Task.Run(() => _processor.CleanBackground(_original, white, tolerance, feather)); UpdatePreview(); }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Image cleanup"); }
-            finally { _clean.IsEnabled = true; }
+            finally { _clean.IsEnabled = true; panel.IsEnabled = true; }
         };
         panel.Children.Add(_clean);
+        var advanced = new Button { Content = "Advanced BG Eraser • brush / restore" };
+        advanced.Click += (_, _) =>
+        {
+            if (!_clean.IsEnabled) return;
+            try
+            {
+                var editor = new BackgroundEraserWindow(_original, _processor, _white.IsChecked == true) { Owner = this };
+                if (editor.ShowDialog() == true) { ProcessedPath = editor.OutputPath; UpdatePreview(); }
+            }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "BG Eraser"); }
+        };
+        panel.Children.Add(advanced);
         var original = new Button { Content = "Restore original image" }; original.Click += (_, _) => { ProcessedPath = null; UpdatePreview(); }; panel.Children.Add(original);
         panel.Children.Add(new TextBlock { Text = "Cleanup creates a static image for this layer, shared by all IDs. Use record photo import for individual portraits.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) });
         var apply = new Button { Content = "Apply crop / image", Margin = new Thickness(0, 8, 0, 0) }; apply.Click += (_, _) => { if (_clean.IsEnabled) { UpdatePreview(); DialogResult = true; } }; panel.Children.Add(apply);
         var cancel = new Button { Content = "Cancel", IsCancel = true }; panel.Children.Add(cancel);
+        Closing += (_, e) => { if (!_clean.IsEnabled) e.Cancel = true; };
         UpdatePreview();
     }
     private void UpdatePreview()
