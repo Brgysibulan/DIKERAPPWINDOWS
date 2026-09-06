@@ -116,7 +116,7 @@ Existing version-1 layout files remain supported. Custom elements, groups, crop 
 
 The Windows workflow is configured to compile the application, run smoke tests for window initialization, legacy/custom layout persistence, edge-connected cleanup, cropped-image pixels, all element render types and a two-person PDF export, then publish the self-contained app. Interactive drag/resize, font selection and physical print alignment still need a Windows user check.
 
-The implementation workspace has no .NET SDK. The new Windows build and smoke tests have not yet run; pushing the branch requires authorization. Local XML/event-handler and whitespace checks are used as preliminary checks only.
+Windows v0.2.1 passed compilation, offline checks, Studio/eraser smoke tests and package publishing in [Build Windows App run #22](https://github.com/Brgysibulan/DIKERAPPWINDOWS/actions/runs/34014783734). The artifact is `DIKERMA-Windows-x64-v0.2.1-UNSIGNED`. Interactive brush feel and physical print alignment still require a Windows user check.
 
 ### How to group elements
 
