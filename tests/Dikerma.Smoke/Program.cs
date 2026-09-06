@@ -23,6 +23,20 @@ internal static class Program
         BackgroundMask.Apply(transparent, 1, 1, 255, 255, 255, true, 75, 20);
         Check(transparent.All(p => p == 255), "Transparent source composites onto white");
 
+        var originalRgba = Enumerable.Repeat((byte)255, 16 * 16 * 4).ToArray();
+        originalRgba[3] = 0;
+        var eraser = new EraserSession(originalRgba, 16, 16);
+        eraser.BeginEdit(); eraser.Paint(8, 8, 3, false, 0);
+        Check(eraser.Composite(false)[(8 * 16 + 8) * 4 + 3] == 0, "Erase brush removes selected pixels");
+        Check(eraser.Composite(false)[(2 * 16 + 2) * 4 + 3] == 255, "Brush preserves pixels outside its radius");
+        eraser.Undo();
+        Check(eraser.Mask[8 * 16 + 8] == 255, "Undo restores complete brush stroke");
+        eraser.Redo();
+        Check(eraser.Mask[8 * 16 + 8] == 0, "Redo reapplies brush stroke");
+        eraser.BeginEdit(); eraser.Paint(8, 8, 3, true, 0);
+        Check(eraser.Mask[8 * 16 + 8] == 255 && eraser.Composite(false)[3] == 0, "Restore recovers original alpha without filling transparent source pixels");
+        Check(eraser.OriginalPixels.SequenceEqual(originalRgba), "Original RGBA remains unchanged after erasing and restoring");
+
         var layout = LayoutCatalog.CreateDefaultProfile();
         var d = new LayoutElementDefinition("custom_test", IdLayoutSide.Front, "Test line", IdLayoutKind.HorizontalLine, 5, 35, 30, 2);
         layout.CustomElements.Add(d); var p = layout.Get(d.Key); p.GroupId = "group"; p.CropLeft = 0.2; p.ZIndex = 8;
@@ -51,6 +65,21 @@ internal static class Program
             var bitmap = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 255, 255, 255, 0, 0, 255 }, 8);
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using (var file = File.Create(imagePath)) encoder.Save(file);
+            var processor = new OfflineImageProcessor(new AssetService());
+            var edit = processor.CreateEraserSession(imagePath);
+            var eraserWindow = new BackgroundEraserWindow(imagePath, processor);
+            Check(eraserWindow.Content is not null, "Advanced eraser window initializes");
+            var mask = processor.CreateMask(edit, 75, 3);
+            Check(mask.Length == 2, "Adaptive mask supports small images");
+            edit.ReplaceMask(new byte[] { 0, 255 });
+            var saved = processor.SaveEraser(edit, false);
+            try
+            {
+                var savedBitmap = OfflineImageProcessor.LoadPreview(saved);
+                var savedBytes = new byte[8]; savedBitmap.CopyPixels(savedBytes, 8, 0);
+                Check(savedBytes[3] == 0 && savedBytes[7] == 255, "Saved transparent PNG preserves edited alpha");
+            }
+            finally { File.Delete(saved); }
             var crop = new ElementPlacement { WidthMm = 10, HeightMm = 10, CropLeft = 0.5 };
             using var rendered = ElementRenderer.Png(d with { Kind = IdLayoutKind.Image }, crop, "", imagePath);
             var frame = BitmapDecoder.Create(rendered, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
