@@ -1,49 +1,126 @@
 # DIKERAPPWINDOWS
 
+## Windows v0.3.0 — Publisher Studio foundation
+
+Developed by **Joshua Apal Pudi**. DIKERMA remains a fully offline .NET 8 WPF Barangay ID Maker with a fixed **85 × 115 mm** ID canvas and two-person A4 front/back PDF export.
+
+v0.3.0 starts the Layout Studio redesign from a form-style editor into a Publisher-like master-design editor. The goal is to make the design reusable while keeping every employee's personal data isolated from every other record.
+
+### Critical record-data isolation fix
+
+The following layers are now explicitly **RECORD DATA**:
+
+- Employee photo
+- Holder signature
+- QR image
+- Employee name
+- Designation
+- Employee / Control number
+- Date of birth
+- Sex
+- Civil status
+- Address
+
+Record-bound text ignores shared `TextOverride` values. Record-bound image layers ignore any stale shared `ImagePath` during PDF export and always resolve the image from the employee currently being rendered. This prevents a photo, name, birthdate, address, signature, or QR from Person 1 from being reused accidentally on Person 2.
+
+On first v0.3 load, old shared text/image overrides attached to record-bound fields are cleared from the saved master layout. Cropping a record-bound image changes the master crop only; it no longer replaces the employee-specific image path.
+
+### Publisher-style Layers panel
+
+Layout Studio now has a dedicated, always-visible **LAYERS** panel instead of relying on the small element drop-down.
+
+- Built-in personal layers are clearly named with `RECORD DATA`.
+- Static labels and decorative elements remain master-design layers.
+- Custom layers use clearer names such as `Custom text 1`, `Image / PNG 1`, `Rectangle 1`, and can be renamed.
+- Show/Hide selected layer.
+- Lock/Unlock selected layer.
+- Move one step Forward/Backward.
+- Move directly To front/To back.
+- Locked layers are protected from drag, group transforms, deletion, and crop replacement.
+
+The old element ComboBox is kept internally for compatibility with the existing editor logic but is hidden from the normal Studio UI.
+
+### Publisher appearance controls
+
+Images and shapes now have reusable master-layer appearance settings:
+
+- Fill color for rectangle/ellipse shapes
+- Border / picture frame On/Off
+- Border color picker
+- Border thickness
+- Rounded-corner radius
+- Element opacity
+- Per-layer lock
+
+The employee-photo frame is now part of the master layer rather than being tied to one employee. Therefore the same frame style is rendered for Person 1, Person 2, and future records. Legacy Photo/QR outline settings are migrated into the new layer-frame system when possible.
+
+Image frames and rounded corners are rendered by the same 300-dpi element renderer used by the PDF engine, so preview and export use the same styling path.
+
+### Layout and alignment improvements
+
+- Layout Studio now uses three work areas: **Canvas | Layers | Properties**.
+- Preview employee selector is available so a real record can be used while designing without making that person's values part of the master template.
+- Align Left / Center / Right and Top / Middle / Bottom controls are available for the current selection.
+- Existing Group/Ungroup, Duplicate, crop, zoom 25–800%, Undo/Redo, snap-to-grid, nudge, Center X/Y, font upload, underline, text outline, shadow, and color pickers remain available.
+- `SAVE MASTER DESIGN • APPLY TO ALL IDs` makes the distinction between template design and record data explicit.
+
+### v0.3 safety model
+
+`MASTER DESIGN`
+- position and size
+- font and text styling
+- frames, colors, shapes, lines and PNG decorations
+- crop percentages
+- visibility and layer order
+
+`EMPLOYEE RECORD`
+- name
+- designation
+- control number
+- date of birth
+- sex / civil status / address
+- photo / signature / QR
+
+`PDF ENGINE`
+- combines the same master design with each employee independently
+- Person 1 and Person 2 are resolved separately
+- record-bound fields cannot be replaced by a shared Studio override
+
+### Still planned for later Publisher iterations
+
+The v0.3 foundation does **not** claim full Microsoft Publisher parity yet. Planned follow-ups include draggable rulers/guides, eight resize handles, rotation, distribute-spacing commands, richer shape border styles, multi-selection directly from the Layers panel, template Save As / multiple template profiles, and more advanced text-box controls such as line spacing and letter spacing.
+
+---
+
 ## Windows v0.2.1 — Advanced BG Eraser and developer branding
 
-Developed by **Joshua Apal Pudi**. The app displays this credit in its sidebar and author metadata. The white **D** on a refined green tile is shared by the executable, window and sidebar, with icon sizes from 16 to 256 pixels.
+The white **D** on a refined green tile is shared by the executable, window and sidebar. v0.2.1 added the advanced fully-offline background eraser while retaining original source photos/signatures separately.
 
 ### Refine an individual photo or signature
 
 1. Open **Records**, select a record or start a new one, then choose a photo/signature.
 2. Click **Advanced BG Eraser • photo** or **Advanced BG Eraser • signature**.
 3. Adjust **Removal strength** and **Edge feather**, then click **Auto remove background**.
-4. Use **Erase brush** to remove leftovers or **Restore brush** to recover detail. Adjust brush radius and softness. Undo/Redo work per brush stroke; Reset returns to the imported original.
-5. Use **Fit image**, zoom buttons, or **Ctrl+mouse wheel** to inspect edges. **Show original** lets you compare without changing the edited mask.
-6. Choose white output or uncheck it for transparent PNG. Click **Apply image**, then **Save Record**.
+4. Use **Erase brush** to remove leftovers or **Restore brush** to recover detail. Undo/Redo work per brush stroke.
+5. Use Fit/zoom or Ctrl+mouse-wheel to inspect edges.
+6. Choose white or transparent output, click Apply image, then Save Record.
 
-New imports retain their original source separately, so reopening the eraser starts from that original. Old records without retained originals use the existing image; re-import the source if detail was already removed. Cancel leaves the current record image unchanged. Photos default to white and signatures default to transparent. Original source files are never overwritten.
+The eraser is offline adaptive color removal plus manual mask refinement, not AI segmentation. Plain backgrounds remain recommended.
 
-Layout Studio also exposes **Advanced BG Eraser • brush / restore** inside its crop/image dialog. This produces a static image for the shared layout; use Records for individual portraits. Cropping remains separate from brush coordinates.
-
-The eraser uses adaptive border-color removal and manual mask refinement, entirely offline. It does not include an AI segmentation model; complex scenes need manual brushing. Inputs are limited to 16 megapixels, and undo history is capped according to image size. Updated smoke tests cover brush isolation, undo/redo, original transparency, PNG alpha output and editor initialization, in addition to existing Studio/PDF checks.
-
-Windows desktop port of the Barangay Sibulan **DIKERMA / Barangay ID Maker**.
-
-Android reference baseline: `Brgysibulan/dikerma` **v0.7.1** at commit `889ca191dadb131a56c10deadd3e6d5d65c2b7c7`.
-
-## Windows v0.2.0 Layout Studio
+## Core Windows features
 
 - .NET 8 WPF desktop application
 - Fully offline at runtime
 - Fixed physical ID size: **85 × 115 mm**
-- Uploaded Front/Back images are the actual ID design
-- Desktop Layout Studio edits dynamic overlays and custom text, images, shapes and straight lines
-- Separate `STA. CRUZ` and `DAVAO DEL SUR` elements
-- Per-element position and size stored in millimetres
-- Per-text font family, font size, color, bold, alignment, underline, outline, shadow, and visibility
-- Safe-margin, center, and 5 mm preview guides
-- Snap-to-grid, precision nudge, Center X/Y, reset selected, reset side
-- One saved layout applies to all current and future employee IDs
-- Layout lock prevents accidental edits
+- Uploaded Front/Back artwork is the actual ID design
 - Employee records stored locally on the PC
-- ID photo cleanup defaults to white background
+- Photo cleanup defaults to white background
 - Signature cleanup defaults to transparent background
-- Manual QR image upload only
-- A4 PDF output supports up to **2 people**, with Front/Back pairing
+- Manual QR image upload
+- A4 PDF output supports up to **2 people**, each with Front/Back pairing
 - DOB output uses full English month format such as **January 12, 1987**
-- Optional cut/photo/QR/signature/back divider outlines
+- Imported Windows fonts via local TTF/OTF without system-wide installation
+- PDF renderer outputs Studio elements at **300 dpi**
 
 ## Local data
 
@@ -57,76 +134,38 @@ Runtime data is stored under the current Windows user's local application-data f
 
 No online database, API, authentication server, or networking code is required.
 
-## Build
-
-GitHub Actions builds on `windows-latest`, verifies the runtime source contains no common networking clients, restores dependencies, compiles Release, and publishes a self-contained `win-x64` artifact named:
-
-`DIKERMA-Windows-x64`
-
-The PDF engine uses **PDFsharp-WPF 6.2.4**.
-
-## Printing rule
-
-For physical-size validation, print PDFs at **Actual Size / 100%**. Do not use **Fit to Page** when measuring the 85 × 115 mm card.
-
-## Repository separation
-
-This Windows repository is independent from `Brgysibulan/dikerma`. Windows development here does not modify the Android stable baseline.
-
-## New Studio controls
-
-- Zoom from 25% to 800%, Fit, and Ctrl+mouse-wheel zoom with scrollbars.
-- Add text, PNG/images, rectangles, ellipses, horizontal and vertical lines. Lines always remain axis-aligned.
-- Shift-click multiple elements; Group/Ungroup; drag to move and drag the gold bottom-right handle to resize. Group movement respects card boundaries.
-- Duplicate, delete custom elements, hide/restore standard fields, bring to front/send to back. Duplicated employee fields retain their data binding.
-- Undo/redo (80 recent edits), save placement, and unsaved-layout prompt on close.
-- Editable text overrides: leave blank to preserve employee/default data. An override is shared by all IDs.
-- Crop image margins non-destructively with a preview and reset.
-- Installed Windows fonts plus local TTF/OTF upload; no system-wide font installation needed.
-- Italic, underline, outline, shadow color/offset/opacity/blur. Shape and line color use the color picker.
-- White D on green application/window icon.
-
-### Shortcuts
+## Shortcuts
 
 | Action | Shortcut |
 | --- | --- |
-| Save placement | Ctrl+S |
+| Save master design | Ctrl+S |
 | Undo / redo | Ctrl+Z / Ctrl+Y |
 | Duplicate / delete | Ctrl+D / Delete |
 | Group / ungroup | Ctrl+G / Ctrl+Shift+G |
 | Select all visible layers | Ctrl+A |
-| Multi-select | Shift+click |
+| Multi-select on canvas | Shift+click |
 | Move / larger step | Arrow / Shift+arrow |
 | Zoom | Ctrl+wheel or Ctrl+plus/minus |
 | Fit preview | Ctrl+0 |
 
-Text-entry controls retain their normal editing shortcuts. Apply selected settings before saving property edits.
+## Printing rule
 
-### Image cleanup and printing limits
+Print PDFs at **Actual Size / 100%**. Do not use **Fit to Page** when validating the 85 × 115 mm physical size.
 
-Background cleanup is fully offline and uses border-connected color removal with adjustable tolerance and edge softness. It preserves enclosed similar-colored regions better than the old whole-image threshold. It is **not AI subject segmentation**: use a plain background and inspect hair/clothing in the preview. White and transparent output are available; originals are not overwritten. Signature import retains its dedicated cleanup.
+## Build and validation
 
-The crop/image dialog operates on the selected layout image. Applying cleanup there creates a static image shared across IDs; import individual employee portraits through Records instead. A crop alone keeps the dynamic image binding.
+GitHub Actions on `windows-latest` performs offline-source verification, restore, Release compilation, Studio smoke tests, self-contained `win-x64` publishing, optional Authenticode signing, and SHA-256 checksum generation.
 
-Studio elements and PDF export share a WPF renderer at **300 dpi**, including imported fonts, crops, shapes, and effects. Text in exported IDs is rasterized, not selectable PDF text. Effects are clipped to the element bounds; leave space inside text boxes for shadows/outlines. The 85 × 115 mm size and two-person A4 front/back arrangement are retained. Print at Actual Size / 100%.
+v0.3 smoke coverage includes:
 
-Existing version-1 layout files remain supported. Custom elements, groups, crop settings and font references are saved in layout.json. Imported assets/fonts remain in the local assets folder. Copying only layout.json to another PC does not copy those assets.
+- layout schema v3
+- explicit record-bound field classification
+- Publisher appearance persistence
+- frame/opacity clamping
+- picture-frame rendering
+- all layout element render types at 300 dpi
+- crop rendering
+- advanced eraser behavior
+- two-person PDF export with a deliberately stale master photo path to exercise record-binding protection
 
-### Validation
-
-The Windows workflow is configured to compile the application, run smoke tests for window initialization, legacy/custom layout persistence, edge-connected cleanup, cropped-image pixels, all element render types and a two-person PDF export, then publish the self-contained app. Interactive drag/resize, font selection and physical print alignment still need a Windows user check.
-
-Windows v0.2.1 passed compilation, offline checks, Studio/eraser smoke tests and package publishing in [Build Windows App run #22](https://github.com/Brgysibulan/DIKERAPPWINDOWS/actions/runs/34014783734). The artifact is `DIKERMA-Windows-x64-v0.2.1-UNSIGNED`. Interactive brush feel and physical print alignment still require a Windows user check.
-
-### How to group elements
-
-Use a group when text, lines, shapes, or logos must stay together while you arrange the ID.
-
-1. In **Layout Studio**, click the first element.
-2. Hold **Shift**, then click each additional element. Selected elements show a gold border.
-3. Click **Group**, or press **Ctrl+G**.
-4. Drag any element in the group to move all of them together.
-5. Drag the small gold handle at the bottom-right of a selected group to resize all selected elements together.
-6. Click **Ungroup**, or press **Ctrl+Shift+G**, when you need to edit each element separately.
-
-Example: select the name, designation, underline, and logo, then group them so the complete name area can be moved as one unit. Save placement with **Ctrl+S** after arranging it. You can use **Ctrl+Z** to undo an unwanted group movement.
+The Android repository `Brgysibulan/dikerma` remains separate and is not modified by Windows development.
