@@ -74,8 +74,10 @@ public partial class MainWindow
     private void TransformSelection(double dx, double dy, bool resize)
     {
         if (_dragStarts.Count == 0) return;
-        var minX = _dragStarts.Values.Min(p => p.XMm); var minY = _dragStarts.Values.Min(p => p.YMm);
-        var maxX = _dragStarts.Values.Max(p => p.XMm + p.WidthMm); var maxY = _dragStarts.Values.Max(p => p.YMm + p.HeightMm);
+        var movable = _dragStarts.Where(x => !_layout.Get(x.Key).Locked).ToDictionary(x => x.Key, x => x.Value);
+        if (movable.Count == 0) return;
+        var minX = movable.Values.Min(p => p.XMm); var minY = movable.Values.Min(p => p.YMm);
+        var maxX = movable.Values.Max(p => p.XMm + p.WidthMm); var maxY = movable.Values.Max(p => p.YMm + p.HeightMm);
         if (!resize)
         {
             if (_layout.SnapToGrid)
@@ -86,9 +88,9 @@ public partial class MainWindow
             dx = Math.Clamp(dx, -minX, LayoutCatalog.CardWidthMm - maxX);
             dy = Math.Clamp(dy, -minY, LayoutCatalog.CardHeightMm - maxY);
         }
-        var sx = Math.Clamp((maxX - minX + dx) / (maxX - minX), Math.Max(0.05, _dragStarts.Values.Max(p => 0.3 / p.WidthMm)), (LayoutCatalog.CardWidthMm - minX) / (maxX - minX));
-        var sy = Math.Clamp((maxY - minY + dy) / (maxY - minY), Math.Max(0.05, _dragStarts.Values.Max(p => 0.3 / p.HeightMm)), (LayoutCatalog.CardHeightMm - minY) / (maxY - minY));
-        foreach (var (key, start) in _dragStarts)
+        var sx = Math.Clamp((maxX - minX + dx) / (maxX - minX), Math.Max(0.05, movable.Values.Max(p => 0.3 / p.WidthMm)), (LayoutCatalog.CardWidthMm - minX) / (maxX - minX));
+        var sy = Math.Clamp((maxY - minY + dy) / (maxY - minY), Math.Max(0.05, movable.Values.Max(p => 0.3 / p.HeightMm)), (LayoutCatalog.CardHeightMm - minY) / (maxY - minY));
+        foreach (var (key, start) in movable)
         {
             var p = _layout.Get(key);
             p.XMm = resize ? minX + (start.XMm - minX) * sx : start.XMm + dx;
@@ -108,7 +110,18 @@ public partial class MainWindow
             try { path = _assets.Import(source, "studio-images"); } catch (Exception ex) { ShowError(ex); return; }
         }
         Remember();
-        var d = new LayoutElementDefinition("custom_" + Guid.NewGuid().ToString("N"), CurrentSide, kind + " " + (_layout.CustomElements.Count + 1), kind,
+        var number = _layout.CustomElements.Count(e => e.Side == CurrentSide && e.Kind == kind) + 1;
+        var label = kind switch
+        {
+            IdLayoutKind.Text => $"Custom text {number}",
+            IdLayoutKind.Image => $"Image / PNG {number}",
+            IdLayoutKind.Rectangle => $"Rectangle {number}",
+            IdLayoutKind.Ellipse => $"Ellipse {number}",
+            IdLayoutKind.HorizontalLine => $"Horizontal line {number}",
+            IdLayoutKind.VerticalLine => $"Vertical line {number}",
+            _ => $"Element {number}"
+        };
+        var d = new LayoutElementDefinition("custom_" + Guid.NewGuid().ToString("N"), CurrentSide, label, kind,
             10, 30, kind == IdLayoutKind.VerticalLine ? 1 : 30, kind == IdLayoutKind.HorizontalLine ? 1 : 12, SampleText: kind == IdLayoutKind.Text ? "Your text" : "");
         _layout.CustomElements.Add(d);
         var p = _layout.Get(d.Key); p.ImagePath = path; p.ZIndex = _layout.Elements.Values.Max(x => x.ZIndex) + 1;
@@ -120,13 +133,13 @@ public partial class MainWindow
     {
         if (_layout.Locked || _selection.Count < 2) { SetStatus("Shift-click two or more elements to group"); return; }
         Remember(); var id = Guid.NewGuid().ToString("N");
-        foreach (var p in SelectedPlacements()) p.Value.GroupId = id;
+        foreach (var p in SelectedPlacements().Where(x => !x.Value.Locked)) p.Value.GroupId = id;
         SetStatus("Grouped • drag or resize together");
     }
     private void Ungroup_Click(object sender, RoutedEventArgs e)
     {
         if (_layout.Locked) return;
-        Remember(); foreach (var p in SelectedPlacements()) p.Value.GroupId = null;
+        Remember(); foreach (var p in SelectedPlacements().Where(x => !x.Value.Locked)) p.Value.GroupId = null;
         SetStatus("Elements ungrouped");
     }
     private void DeleteElement_Click(object sender, RoutedEventArgs e)
@@ -135,6 +148,7 @@ public partial class MainWindow
         Remember();
         foreach (var key in _selection.ToList())
         {
+            if (_layout.Get(key).Locked) continue;
             if (_layout.CustomElements.RemoveAll(d => d.Key == key) > 0) _layout.Elements.Remove(key);
             else _layout.Get(key).Visible = false;
         }
@@ -149,11 +163,12 @@ public partial class MainWindow
         foreach (var d in selected)
         {
             var copy = d with { Key = "custom_" + Guid.NewGuid().ToString("N"), DisplayName = d.DisplayName + " copy" };
-            var p = _layout.Get(d.Key).Clone(); p.GroupId = group;
+            var p = _layout.Get(d.Key).Clone(); p.GroupId = group; p.Locked = false;
             if (LayoutCatalog.Find(d.Key) is not null) p.BindingKey = d.Key;
             p.XMm += 2; p.YMm += 2; p.Clamp();
             _layout.CustomElements.Add(copy); _layout.Elements[copy.Key] = p; copies.Add(copy);
         }
+        if (copies.Count == 0) return;
         RefreshLayoutElementList(); LayoutElementComboBox.SelectedItem = copies[0];
         _selection.Clear(); foreach (var d in copies) _selection.Add(d.Key);
         RefreshLayoutPreview();
@@ -163,8 +178,8 @@ public partial class MainWindow
         if (_layout.Locked) return;
         Remember(); var top = (sender as Button)?.Tag?.ToString() == "front";
         var z = top ? _layout.Elements.Values.Max(p => p.ZIndex) + 1 : _layout.Elements.Values.Min(p => p.ZIndex) - 1;
-        foreach (var p in SelectedPlacements()) p.Value.ZIndex = z;
-        RefreshLayoutPreview();
+        foreach (var p in SelectedPlacements().Where(x => !x.Value.Locked)) p.Value.ZIndex = z;
+        RefreshLayoutElementList(); RefreshLayoutPreview();
     }
 
     private void SetZoom(double zoom)
@@ -205,7 +220,9 @@ public partial class MainWindow
     {
         if (_layout.Locked || _selectedLayoutElement?.Kind != IdLayoutKind.Image) { SetStatus("Select an image layer to crop"); return; }
         var p = _layout.Get(_selectedLayoutElement.Key);
-        var path = p.ImagePath ?? ResolvePreviewImage(p.BindingKey ?? _selectedLayoutElement.Key);
+        if (p.Locked) { SetStatus("Unlock this layer before cropping"); return; }
+        var bindingKey = p.BindingKey ?? _selectedLayoutElement.Key;
+        var path = LayoutCatalog.IsRecordBoundKey(bindingKey) ? ResolvePreviewImage(bindingKey) : p.ImagePath ?? ResolvePreviewImage(bindingKey);
         if (string.IsNullOrEmpty(path)) { SetStatus("Upload an image first"); return; }
         try
         {
@@ -213,8 +230,8 @@ public partial class MainWindow
             if (dialog.ShowDialog() != true) return;
             Remember(); p.CropLeft = dialog.Result.CropLeft; p.CropTop = dialog.Result.CropTop;
             p.CropRight = dialog.Result.CropRight; p.CropBottom = dialog.Result.CropBottom;
-            // Keep record-bound portraits bound to each employee unless explicitly replacing this layer.
-            if (dialog.ProcessedPath is not null) p.ImagePath = dialog.ProcessedPath;
+            // A record-bound photo/signature/QR may be cropped in the template, but its image path stays per employee.
+            if (dialog.ProcessedPath is not null && !LayoutCatalog.IsRecordBoundKey(bindingKey)) p.ImagePath = dialog.ProcessedPath;
             RefreshLayoutPreview();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -256,5 +273,5 @@ public partial class MainWindow
         e.Handled = true;
     }
     private void Shortcuts_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this,
-        "Shift-click: select multiple elements\nDrag: move selection\nDrag bottom-right corner: resize selection\nCtrl+G / Ctrl+Shift+G: group / ungroup\nCtrl+D: duplicate\nDelete: remove custom / hide standard field\nCtrl+Z / Ctrl+Y: undo / redo\nCtrl+A: select all visible elements\nArrows: move • Shift: 10× step\nCtrl+mouse wheel or +/−: zoom\nCtrl+0: fit\nCtrl+S: save placement\n\nText fields keep their normal editing shortcuts.", "Studio shortcuts");
+        "Shift-click: select multiple elements\nDrag: move selection\nDrag bottom-right corner: resize selection\nCtrl+G / Ctrl+Shift+G: group / ungroup\nCtrl+D: duplicate\nDelete: remove custom / hide standard field\nCtrl+Z / Ctrl+Y: undo / redo\nCtrl+A: select all visible elements\nArrows: move • Shift: 10× step\nCtrl+mouse wheel or +/−: zoom\nCtrl+0: fit\nCtrl+S: save master design\n\nRecord-bound data stays attached to the employee. Locked layers cannot move or be deleted.", "Studio shortcuts");
 }

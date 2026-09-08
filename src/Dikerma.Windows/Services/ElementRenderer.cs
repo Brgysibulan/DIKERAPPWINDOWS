@@ -18,9 +18,14 @@ public sealed class ElementRenderer : FrameworkElement
 
     private ElementRenderer(LayoutElementDefinition definition, ElementPlacement p, string text, string? image)
     {
-        _definition = definition; _p = p; _text = p.TextOverride ?? text; _image = image;
-        Width = p.WidthMm * DipPerMm; Height = p.HeightMm * DipPerMm;
+        _definition = definition;
+        _p = p;
+        _text = LayoutCatalog.IsRecordBound(definition, p) ? text : p.TextOverride ?? text;
+        _image = image;
+        Width = p.WidthMm * DipPerMm;
+        Height = p.HeightMm * DipPerMm;
         ClipToBounds = true;
+        Opacity = p.Opacity;
         if (p.ShadowEnabled) Effect = new DropShadowEffect
         {
             Color = ColorOf(p.ShadowColor), Opacity = p.ShadowOpacity,
@@ -34,10 +39,16 @@ public sealed class ElementRenderer : FrameworkElement
 
     protected override void OnRender(DrawingContext dc)
     {
-        var brush = new SolidColorBrush(ColorOf(_p.TextColor));
-        var stroke = Math.Min(_p.StrokeWidthPt * 96 / 72, Math.Min(Width, Height));
-        var pen = new Pen(brush, stroke);
+        var textBrush = new SolidColorBrush(ColorOf(_p.TextColor));
+        var lineStroke = Math.Min(_p.StrokeWidthPt * 96 / 72, Math.Min(Width, Height));
+        var linePen = new Pen(textBrush, lineStroke);
         var rect = new Rect(0, 0, Width, Height);
+        var radius = Math.Max(0, _p.CornerRadiusMm * DipPerMm);
+        var borderPen = _p.BorderEnabled
+            ? new Pen(new SolidColorBrush(ColorOf(_p.BorderColor)), Math.Max(0.1, _p.BorderThicknessPt * 96 / 72))
+            : null;
+        var fillBrush = new SolidColorBrush(ColorOf(_p.FillColor));
+
         switch (_definition.Kind)
         {
             case IdLayoutKind.Image:
@@ -49,26 +60,43 @@ public sealed class ElementRenderer : FrameworkElement
                     int left = (int)(_p.CropLeft * bitmap.PixelWidth), top = (int)(_p.CropTop * bitmap.PixelHeight);
                     int width = Math.Max(1, (int)((1 - _p.CropLeft - _p.CropRight) * bitmap.PixelWidth));
                     int height = Math.Max(1, (int)((1 - _p.CropTop - _p.CropBottom) * bitmap.PixelHeight));
-                    dc.DrawImage(new CroppedBitmap(bitmap, new Int32Rect(left, top, Math.Min(width, bitmap.PixelWidth - left), Math.Min(height, bitmap.PixelHeight - top))), rect);
+                    var cropped = new CroppedBitmap(bitmap, new Int32Rect(left, top, Math.Min(width, bitmap.PixelWidth - left), Math.Min(height, bitmap.PixelHeight - top)));
+                    if (radius > 0)
+                    {
+                        dc.PushClip(new RectangleGeometry(rect, radius, radius));
+                        dc.DrawImage(cropped, rect);
+                        dc.Pop();
+                    }
+                    else dc.DrawImage(cropped, rect);
                 }
+                if (borderPen is not null)
+                    dc.DrawRoundedRectangle(null, borderPen, rect, radius, radius);
                 break;
-            case IdLayoutKind.HorizontalLine: dc.DrawLine(pen, new Point(0, Height / 2), new Point(Width, Height / 2)); break;
-            case IdLayoutKind.VerticalLine: dc.DrawLine(pen, new Point(Width / 2, 0), new Point(Width / 2, Height)); break;
-            case IdLayoutKind.Rectangle: dc.DrawRectangle(brush, null, rect); break;
-            case IdLayoutKind.Ellipse: dc.DrawEllipse(brush, null, new Point(Width / 2, Height / 2), Width / 2, Height / 2); break;
+            case IdLayoutKind.HorizontalLine:
+                dc.DrawLine(linePen, new Point(0, Height / 2), new Point(Width, Height / 2));
+                break;
+            case IdLayoutKind.VerticalLine:
+                dc.DrawLine(linePen, new Point(Width / 2, 0), new Point(Width / 2, Height));
+                break;
+            case IdLayoutKind.Rectangle:
+                dc.DrawRoundedRectangle(fillBrush, borderPen, rect, radius, radius);
+                break;
+            case IdLayoutKind.Ellipse:
+                dc.DrawEllipse(fillBrush, borderPen, new Point(Width / 2, Height / 2), Width / 2, Height / 2);
+                break;
             default:
                 var family = _p.FontFamilyKey switch { "sans" => "Arial", "serif" => "Times New Roman", "monospace" => "Consolas", _ => _p.FontFamilyKey };
                 var text = new FormattedText(_text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                     new Typeface(new FontFamily(family), _p.Italic ? FontStyles.Italic : FontStyles.Normal,
                         _p.Bold ? FontWeights.Bold : FontWeights.Normal, FontStretches.Normal),
-                    _p.FontSizePt * 96 / 72, brush, 1)
+                    _p.FontSizePt * 96 / 72, textBrush, 1)
                 {
                     MaxTextWidth = Width, MaxTextHeight = Height,
                     TextAlignment = _p.Alignment switch { IdTextAlignment.Center => TextAlignment.Center, IdTextAlignment.Right => TextAlignment.Right, _ => TextAlignment.Left },
                     Trimming = TextTrimming.None
                 };
                 var geometry = text.BuildGeometry(new Point(0, 0));
-                dc.DrawGeometry(brush, _p.TextOutlineEnabled ? new Pen(new SolidColorBrush(ColorOf(_p.TextOutlineColor)), _p.TextOutlineWidthPt * 96 / 72) : null, geometry);
+                dc.DrawGeometry(textBrush, _p.TextOutlineEnabled ? new Pen(new SolidColorBrush(ColorOf(_p.TextOutlineColor)), _p.TextOutlineWidthPt * 96 / 72) : null, geometry);
                 if (_p.UnderlineEnabled)
                 {
                     var w = _p.UnderlineWidthMode == IdUnderlineWidthMode.Element ? Width : Math.Min(Width, text.Width);

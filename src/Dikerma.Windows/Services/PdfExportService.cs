@@ -63,10 +63,16 @@ public sealed class PdfExportService
             var ey = y + Mm(placement.YMm);
             var ew = Mm(placement.WidthMm);
             var eh = Mm(placement.HeightMm);
+            var bindingKey = placement.BindingKey ?? definition.Key;
+
+            // Record-bound layers must always resolve from the employee currently being rendered.
+            // Never let a Studio preview/crop path or a stale text override leak Person 1 into Person 2.
+            var image = LayoutCatalog.IsRecordBoundKey(bindingKey)
+                ? ResolveImage(bindingKey, employee, settings)
+                : placement.ImagePath ?? ResolveImage(bindingKey, employee, settings);
 
             using var png = ElementRenderer.Png(definition, placement,
-                ResolveText(placement.BindingKey ?? definition.Key, definition.SampleText, employee, settings),
-                placement.ImagePath ?? ResolveImage(placement.BindingKey ?? definition.Key, employee, settings));
+                ResolveText(bindingKey, definition.SampleText, employee, settings), image);
             using var rendered = XImage.FromStream(png);
             gfx.DrawImage(rendered, ex, ey, ew, eh);
         }
@@ -100,10 +106,11 @@ public sealed class PdfExportService
 
         if (side == IdLayoutSide.Front)
         {
-            if (settings.PhotoOutlineEnabled)
+            // Keep old settings compatible, but do not double-draw when the Publisher frame is enabled.
+            if (settings.PhotoOutlineEnabled && !layout.Get("front_photo").BorderEnabled)
                 DrawPlacementRectangle(gfx, pen, x, y, layout.Get("front_photo"));
 
-            if (settings.QrOutlineEnabled)
+            if (settings.QrOutlineEnabled && !layout.Get("front_qr").BorderEnabled)
                 DrawPlacementRectangle(gfx, pen, x, y, layout.Get("front_qr"));
 
             if (settings.SignatureLineEnabled)
