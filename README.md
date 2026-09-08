@@ -1,8 +1,37 @@
 # DIKERAPPWINDOWS
 
+**DIKERMA Windows v0.3.0** — Fully offline Barangay ID Maker for Windows with a Publisher-style master Layout Studio, isolated employee record data, reusable picture frames, advanced background erasing, and fixed **85 × 115 mm** ID output.
+
+Developed by **Joshua Apal Pudi / JOSHUAPUDI**.
+
+## Current status — READY FOR TESTING
+
+- Official branch: **`main`**
+- Current version: **v0.3.0**
+- Main commit: **`d36ac0572d90a01ab706e9fbe93e9880de57115d`**
+- GitHub Actions main build: **#26 — PASSED**
+- Windows artifact: **`DIKERMA-Windows-x64-v0.3.0-UNSIGNED`**
+- Runtime: **fully offline**
+- Target: **Windows x64 / .NET 8 WPF**
+
+Build #26 passed offline-source verification, restore, Release compilation, Studio/PDF smoke tests, self-contained Windows publishing, checksum generation, and artifact upload. The executable is currently **unsigned**, so Windows SmartScreen may still show an Unknown Publisher warning during testing.
+
+### Recommended acceptance test
+
+1. Create at least **two different employee records** with different names, photos, dates of birth, addresses, signatures, and QR images.
+2. Use the **Preview Employee** selector in Layout Studio and confirm the selected employee changes only the preview data, not the master design.
+3. Confirm Person 1 data never appears on Person 2 and vice versa.
+4. Enable a photo frame and change its **color, thickness, rounded corners, and opacity**. Verify the same master frame appears consistently for both people.
+5. Test Layers: select, show/hide, lock/unlock, rename custom layers, Forward/Backward, To front/To back.
+6. Test Align Left/Center/Right and Top/Middle/Bottom.
+7. Test existing crop, background eraser, group/ungroup, duplicate, zoom, font, underline, outline, shadow, and color controls.
+8. Export a two-person A4 PDF and print only at **Actual Size / 100%** when checking the physical 85 × 115 mm size.
+
+Report any mismatch between the Studio preview and exported PDF before customer release.
+
 ## Windows v0.3.0 — Publisher Studio foundation
 
-Developed by **Joshua Apal Pudi**. DIKERMA remains a fully offline .NET 8 WPF Barangay ID Maker with a fixed **85 × 115 mm** ID canvas and two-person A4 front/back PDF export.
+DIKERMA remains a fully offline .NET 8 WPF Barangay ID Maker with a fixed **85 × 115 mm** ID canvas and two-person A4 front/back PDF export.
 
 v0.3.0 starts the Layout Studio redesign from a form-style editor into a Publisher-like master-design editor. The goal is to make the design reusable while keeping every employee's personal data isolated from every other record.
 
@@ -148,13 +177,15 @@ No online database, API, authentication server, or networking code is required.
 | Zoom | Ctrl+wheel or Ctrl+plus/minus |
 | Fit preview | Ctrl+0 |
 
+Text-entry controls retain their normal editing shortcuts.
+
 ## Printing rule
 
 Print PDFs at **Actual Size / 100%**. Do not use **Fit to Page** when validating the 85 × 115 mm physical size.
 
 ## Build and validation
 
-GitHub Actions on `windows-latest` performs offline-source verification, restore, Release compilation, Studio smoke tests, self-contained `win-x64` publishing, optional Authenticode signing, and SHA-256 checksum generation.
+GitHub Actions on `windows-latest` performs offline-source verification, restore, Release compilation, Studio smoke tests, self-contained `win-x64` publishing, optional Authenticode signing, SHA-256 checksum generation, and artifact upload.
 
 v0.3 smoke coverage includes:
 
@@ -167,5 +198,11 @@ v0.3 smoke coverage includes:
 - crop rendering
 - advanced eraser behavior
 - two-person PDF export with a deliberately stale master photo path to exercise record-binding protection
+
+### Current release gate
+
+**Testing build:** `DIKERMA-Windows-x64-v0.3.0-UNSIGNED`
+
+Automated CI is passing, but interactive Windows acceptance testing and physical print alignment should still be completed before treating v0.3.0 as a customer-ready release. Authenticode signing is also still required if the goal is to remove Unknown Publisher warnings on customer PCs.
 
 The Android repository `Brgysibulan/dikerma` remains separate and is not modified by Windows development.
