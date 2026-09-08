@@ -38,14 +38,23 @@ internal static class Program
         Check(eraser.OriginalPixels.SequenceEqual(originalRgba), "Original RGBA remains unchanged after erasing and restoring");
 
         var layout = LayoutCatalog.CreateDefaultProfile();
+        Check(layout.SchemaVersion == 3, "Publisher layout schema is v3");
+        Check(LayoutCatalog.IsRecordBoundKey("front_photo") && LayoutCatalog.IsRecordBoundKey("back_address_value"), "Personal fields are explicitly record-bound");
+        Check(!LayoutCatalog.IsRecordBoundKey("front_id_title"), "Static design text remains template-bound");
+        var photoPlacement = layout.Get("front_photo");
+        Check(photoPlacement.BorderEnabled && photoPlacement.BorderColor == "#00522D", "Default employee photo frame is part of the master layer");
+
         var d = new LayoutElementDefinition("custom_test", IdLayoutSide.Front, "Test line", IdLayoutKind.HorizontalLine, 5, 35, 30, 2);
         layout.CustomElements.Add(d); var p = layout.Get(d.Key); p.GroupId = "group"; p.CropLeft = 0.2; p.ZIndex = 8;
+        p.FillColor = "#00FF00"; p.BorderEnabled = true; p.BorderColor = "#FF0000"; p.BorderThicknessPt = 1; p.CornerRadiusMm = 2; p.Opacity = 0.8;
         layout = JsonSerializer.Deserialize<LayoutProfile>(JsonSerializer.Serialize(layout))!;
         Check(layout.ForSide(IdLayoutSide.Front).Any(e => e.Key == d.Key) && layout.Get(d.Key).GroupId == "group", "Custom layers and groups survive save/reload");
+        Check(layout.Get(d.Key).BorderEnabled && layout.Get(d.Key).BorderColor == "#FF0000", "Publisher appearance survives save/reload");
         var old = JsonSerializer.Deserialize<LayoutProfile>("{\"SchemaVersion\":1,\"Elements\":{}}")!;
         Check(old.ForSide(IdLayoutSide.Front).Count() > 0 && old.CustomElements.Count == 0, "Legacy layouts load with default fields");
-        p.CropLeft = 0.9; p.CropRight = 0.9; p.Clamp();
+        p.CropLeft = 0.9; p.CropRight = 0.9; p.BorderThicknessPt = 99; p.Opacity = 2; p.Clamp();
         Check(p.CropLeft + p.CropRight <= 0.950001, "Crop retains a positive image area");
+        Check(p.BorderThicknessPt <= 8 && p.Opacity <= 1, "Publisher frame and opacity values are clamped safely");
 
         var app = new App(); app.InitializeComponent();
         var window = new MainWindow();
@@ -53,11 +62,27 @@ internal static class Program
         foreach (var kind in Enum.GetValues<IdLayoutKind>())
         {
             var def = d with { Kind = kind };
-            var placement = new ElementPlacement { WidthMm = 30, HeightMm = 15, FontFamilyKey = "Arial", ShadowEnabled = true, TextOutlineEnabled = true, UnderlineEnabled = true, Italic = true };
+            var placement = new ElementPlacement
+            {
+                WidthMm = 30, HeightMm = 15, FontFamilyKey = "Arial", ShadowEnabled = true,
+                TextOutlineEnabled = true, UnderlineEnabled = true, Italic = true,
+                FillColor = "#00AA55", BorderEnabled = true, BorderColor = "#00522D", BorderThicknessPt = 0.8, CornerRadiusMm = 1.5
+            };
             using var stream = ElementRenderer.Png(def, placement, "SIBULAN", null);
             var bitmap = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
             Check(bitmap.PixelWidth == 355 && bitmap.PixelHeight == 178, kind + " renders at 300 dpi");
         }
+
+        var frameDef = new LayoutElementDefinition("frame_test", IdLayoutSide.Front, "Frame", IdLayoutKind.Image, 0, 0, 10, 10);
+        var framePlacement = new ElementPlacement { WidthMm = 10, HeightMm = 10, BorderEnabled = true, BorderColor = "#FF0000", BorderThicknessPt = 1.5, CornerRadiusMm = 1 };
+        using (var framed = ElementRenderer.Png(frameDef, framePlacement, "", null))
+        {
+            var frameBitmap = BitmapDecoder.Create(framed, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
+            var frameBytes = new byte[frameBitmap.PixelWidth * frameBitmap.PixelHeight * 4];
+            frameBitmap.CopyPixels(frameBytes, frameBitmap.PixelWidth * 4, 0);
+            Check(frameBytes.Any(b => b != 0), "Picture frame renders even when image content is empty");
+        }
+
         var folder = Path.Combine(Path.GetTempPath(), "dikerma-smoke-" + Guid.NewGuid()); Directory.CreateDirectory(folder);
         try
         {
@@ -86,9 +111,16 @@ internal static class Program
             var bytes = new byte[frame.PixelWidth * frame.PixelHeight * 4]; frame.CopyPixels(bytes, frame.PixelWidth * 4, 0);
             var center = ((frame.PixelHeight / 2) * frame.PixelWidth + frame.PixelWidth / 2) * 4;
             Check(bytes[center] > 240 && bytes[center + 2] < 15, "Image crop removes red half and retains blue half");
+
+            // Deliberately place a stale image path on the master photo layer. PDF rendering must ignore it
+            // for record-bound photos and resolve each card from its own EmployeeRecord instead.
+            layout.Get("front_photo").ImagePath = imagePath;
             var output = Path.Combine(folder, "ids.pdf");
-            new PdfExportService().Export(output, new EmployeeRecord { FullName = "PERSON ONE" }, new EmployeeRecord { FullName = "PERSON TWO" }, new AppSettingsModel(), layout);
-            Check(new FileInfo(output).Length > 1000, "Two-person A4 PDF exports with custom layers");
+            new PdfExportService().Export(output,
+                new EmployeeRecord { FullName = "PERSON ONE", PhotoPath = null },
+                new EmployeeRecord { FullName = "PERSON TWO", PhotoPath = null },
+                new AppSettingsModel(), layout);
+            Check(new FileInfo(output).Length > 1000, "Two-person A4 PDF exports with protected record-bound layers");
         }
         finally { Directory.Delete(folder, true); }
         Console.WriteLine("All Windows smoke checks passed.");
