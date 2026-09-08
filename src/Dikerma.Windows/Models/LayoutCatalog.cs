@@ -10,6 +10,13 @@ public static class LayoutCatalog
     private const string Black = "#000000";
     private const string White = "#FFFFFF";
 
+    private static readonly HashSet<string> RecordBoundKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "front_photo", "front_signature", "front_qr",
+        "front_name_value", "front_designation_value", "front_employee_no_value",
+        "back_dob_value", "back_sex_value", "back_civil_value", "back_address_value"
+    };
+
     public static readonly IReadOnlyList<LayoutElementDefinition> Elements = new List<LayoutElementDefinition>
     {
         new("front_logo_1", IdLayoutSide.Front, "Logo 1", IdLayoutKind.Image, 5, 4, 14, 14),
@@ -18,26 +25,26 @@ public static class LayoutCatalog
         new("front_municipality", IdLayoutSide.Front, "Municipality / Sta. Cruz", IdLayoutKind.Text, 20, 10.8, 45, 4.3, 7.2, IdTextAlignment.Center, White, false, "STA. CRUZ"),
         new("front_province", IdLayoutSide.Front, "Province / Davao del Sur", IdLayoutKind.Text, 20, 15, 45, 4.3, 7, IdTextAlignment.Center, White, false, "DAVAO DEL SUR"),
         new("front_id_title", IdLayoutSide.Front, "ID title", IdLayoutKind.Text, 20, 19.3, 45, 5, 8.6, IdTextAlignment.Center, Green, true, "BARANGAY EMPLOYEE ID"),
-        new("front_photo", IdLayoutSide.Front, "Employee photo", IdLayoutKind.Image, 6, 27, 31, 40),
+        new("front_photo", IdLayoutSide.Front, "Employee photo • RECORD DATA", IdLayoutKind.Image, 6, 27, 31, 40),
         new("front_name_label", IdLayoutSide.Front, "NAME label", IdLayoutKind.Text, 41, 28, 38, 4, 6.8, IdTextAlignment.Left, Green, true, "NAME"),
-        new("front_name_value", IdLayoutSide.Front, "Employee name", IdLayoutKind.Text, 41, 33.2, 38, 12, 10.5, IdTextAlignment.Left, Black, true, "ROWENA A. TABO"),
+        new("front_name_value", IdLayoutSide.Front, "Employee name • RECORD DATA", IdLayoutKind.Text, 41, 33.2, 38, 12, 10.5, IdTextAlignment.Left, Black, true, "ROWENA A. TABO"),
         new("front_designation_label", IdLayoutSide.Front, "DESIGNATION label", IdLayoutKind.Text, 41, 47, 38, 4, 6.8, IdTextAlignment.Left, Green, true, "DESIGNATION"),
-        new("front_designation_value", IdLayoutSide.Front, "Designation", IdLayoutKind.Text, 41, 52.2, 38, 12, 9.4, IdTextAlignment.Left, Black, true, "PUNONG BARANGAY"),
+        new("front_designation_value", IdLayoutSide.Front, "Designation • RECORD DATA", IdLayoutKind.Text, 41, 52.2, 38, 12, 9.4, IdTextAlignment.Left, Black, true, "PUNONG BARANGAY"),
         new("front_employee_no_label", IdLayoutSide.Front, "EMPLOYEE NO. label", IdLayoutKind.Text, 41, 65, 38, 4, 6.8, IdTextAlignment.Left, Green, true, "EMPLOYEE NO."),
-        new("front_employee_no_value", IdLayoutSide.Front, "Employee number", IdLayoutKind.Text, 41, 70.2, 34, 5, 10, IdTextAlignment.Left, Black, true, "2026001"),
-        new("front_signature", IdLayoutSide.Front, "Holder signature", IdLayoutKind.Image, 7, 79, 33, 10),
+        new("front_employee_no_value", IdLayoutSide.Front, "Employee number • RECORD DATA", IdLayoutKind.Text, 41, 70.2, 34, 5, 10, IdTextAlignment.Left, Black, true, "2026001"),
+        new("front_signature", IdLayoutSide.Front, "Holder signature • RECORD DATA", IdLayoutKind.Image, 7, 79, 33, 10),
         new("front_signature_label", IdLayoutSide.Front, "Signature label", IdLayoutKind.Text, 6, 90.5, 35, 4, 6.6, IdTextAlignment.Center, Green, true, "SIGNATURE OF HOLDER"),
         new("front_qr_label", IdLayoutSide.Front, "QR label", IdLayoutKind.Text, 55, 77.5, 24, 4, 6.3, IdTextAlignment.Center, Green, true, "SCAN TO VERIFY"),
-        new("front_qr", IdLayoutSide.Front, "QR image", IdLayoutKind.Image, 57, 82.5, 20, 20),
+        new("front_qr", IdLayoutSide.Front, "QR image • RECORD DATA", IdLayoutKind.Image, 57, 82.5, 20, 20),
 
         new("back_dob_label", IdLayoutSide.Back, "DATE OF BIRTH label", IdLayoutKind.Text, 7, 7, 22, 4, 7, IdTextAlignment.Left, Green, true, "DATE OF BIRTH:"),
-        new("back_dob_value", IdLayoutSide.Back, "Date of birth", IdLayoutKind.Text, 30, 7, 48, 4, 7.8, IdTextAlignment.Left, Black, false, "January 12, 1987"),
+        new("back_dob_value", IdLayoutSide.Back, "Date of birth • RECORD DATA", IdLayoutKind.Text, 30, 7, 48, 4, 7.8, IdTextAlignment.Left, Black, false, "January 12, 1987"),
         new("back_sex_label", IdLayoutSide.Back, "SEX label", IdLayoutKind.Text, 7, 14, 10, 4, 7, IdTextAlignment.Left, Green, true, "SEX:"),
-        new("back_sex_value", IdLayoutSide.Back, "Sex", IdLayoutKind.Text, 17, 14, 18, 4, 7.8, IdTextAlignment.Left, Black, false, "Female"),
+        new("back_sex_value", IdLayoutSide.Back, "Sex • RECORD DATA", IdLayoutKind.Text, 17, 14, 18, 4, 7.8, IdTextAlignment.Left, Black, false, "Female"),
         new("back_civil_label", IdLayoutSide.Back, "CIVIL STATUS label", IdLayoutKind.Text, 40, 14, 23, 4, 7, IdTextAlignment.Left, Green, true, "CIVIL STATUS:"),
-        new("back_civil_value", IdLayoutSide.Back, "Civil status", IdLayoutKind.Text, 63, 14, 15, 4, 7.2, IdTextAlignment.Left, Black, false, "Married"),
+        new("back_civil_value", IdLayoutSide.Back, "Civil status • RECORD DATA", IdLayoutKind.Text, 63, 14, 15, 4, 7.2, IdTextAlignment.Left, Black, false, "Married"),
         new("back_address_label", IdLayoutSide.Back, "ADDRESS label", IdLayoutKind.Text, 7, 21, 71, 4, 7, IdTextAlignment.Left, Green, true, "ADDRESS:"),
-        new("back_address_value", IdLayoutSide.Back, "Address", IdLayoutKind.Text, 7, 26, 71, 9, 7.2, IdTextAlignment.Left, Black, false, "Sitio Tungcaling, Barangay Sibulan, Sta. Cruz, Davao del Sur"),
+        new("back_address_value", IdLayoutSide.Back, "Address • RECORD DATA", IdLayoutKind.Text, 7, 26, 71, 9, 7.2, IdTextAlignment.Left, Black, false, "Sitio Tungcaling, Barangay Sibulan, Sta. Cruz, Davao del Sur"),
         new("back_identification_heading", IdLayoutSide.Back, "IDENTIFICATION heading", IdLayoutKind.Text, 9, 38.5, 67, 5, 8.5, IdTextAlignment.Center, Green, true, "IDENTIFICATION"),
         new("back_identification_body", IdLayoutSide.Back, "Identification paragraph", IdLayoutKind.Text, 9, 44, 67, 18, 7, IdTextAlignment.Left, Black, false, "This identification card is issued to the bearer whose photograph appears herein and who is a bona fide employee of the Barangay Local Government Unit of Sibulan."),
         new("back_issued_label", IdLayoutSide.Back, "ISSUED BY label", IdLayoutKind.Text, 8, 64, 30, 4, 7.5, IdTextAlignment.Left, Green, true, "ISSUED BY:"),
@@ -56,33 +63,56 @@ public static class LayoutCatalog
 
     public static LayoutElementDefinition? Find(string key) => Elements.FirstOrDefault(x => x.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
 
-    public static ElementPlacement DefaultPlacement(LayoutElementDefinition definition) => new()
+    public static bool IsRecordBoundKey(string? key) => key is not null && RecordBoundKeys.Contains(key);
+
+    public static bool IsRecordBound(LayoutElementDefinition definition, ElementPlacement placement) =>
+        IsRecordBoundKey(placement.BindingKey ?? definition.Key);
+
+    public static ElementPlacement DefaultPlacement(LayoutElementDefinition definition)
     {
-        XMm = definition.DefaultXmm,
-        YMm = definition.DefaultYmm,
-        WidthMm = definition.DefaultWidthMm,
-        HeightMm = definition.DefaultHeightMm,
-        FontSizePt = definition.DefaultFontPt,
-        FontFamilyKey = "sans",
-        Bold = definition.DefaultBold,
-        Alignment = definition.DefaultAlignment,
-        TextColor = definition.DefaultColor,
-        UnderlineEnabled = false,
-        UnderlineColor = definition.DefaultColor,
-        UnderlineThicknessPt = 0.45,
-        UnderlineOffsetMm = 0.7,
-        UnderlineWidthMode = IdUnderlineWidthMode.Text,
-        TextOutlineEnabled = false,
-        TextOutlineColor = definition.DefaultColor.Equals(White, StringComparison.OrdinalIgnoreCase) ? Black : White,
-        TextOutlineWidthPt = 0.35,
-        ShadowEnabled = false,
-        ShadowColor = Black,
-        ShadowOpacity = 0.35,
-        ShadowDxMm = 0.45,
-        ShadowDyMm = 0.45,
-        ShadowRadiusPt = 0,
-        Visible = true
-    };
+        var placement = new ElementPlacement
+        {
+            XMm = definition.DefaultXmm,
+            YMm = definition.DefaultYmm,
+            WidthMm = definition.DefaultWidthMm,
+            HeightMm = definition.DefaultHeightMm,
+            FontSizePt = definition.DefaultFontPt,
+            FontFamilyKey = "sans",
+            Bold = definition.DefaultBold,
+            Alignment = definition.DefaultAlignment,
+            TextColor = definition.DefaultColor,
+            FillColor = definition.Kind is IdLayoutKind.Rectangle or IdLayoutKind.Ellipse ? definition.DefaultColor : White,
+            BorderEnabled = false,
+            BorderColor = Black,
+            BorderThicknessPt = 0.6,
+            CornerRadiusMm = 0,
+            Opacity = 1,
+            UnderlineEnabled = false,
+            UnderlineColor = definition.DefaultColor,
+            UnderlineThicknessPt = 0.45,
+            UnderlineOffsetMm = 0.7,
+            UnderlineWidthMode = IdUnderlineWidthMode.Text,
+            TextOutlineEnabled = false,
+            TextOutlineColor = definition.DefaultColor.Equals(White, StringComparison.OrdinalIgnoreCase) ? Black : White,
+            TextOutlineWidthPt = 0.35,
+            ShadowEnabled = false,
+            ShadowColor = Black,
+            ShadowOpacity = 0.35,
+            ShadowDxMm = 0.45,
+            ShadowDyMm = 0.45,
+            ShadowRadiusPt = 0,
+            Visible = true
+        };
+
+        if (definition.Key.Equals("front_photo", StringComparison.OrdinalIgnoreCase))
+        {
+            placement.BorderEnabled = true;
+            placement.BorderColor = Green;
+            placement.BorderThicknessPt = 0.8;
+        }
+
+        return placement;
+    }
 
     public static LayoutProfile CreateDefaultProfile()
     {
