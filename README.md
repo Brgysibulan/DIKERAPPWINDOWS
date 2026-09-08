@@ -1,5 +1,24 @@
 # DIKERAPPWINDOWS
 
+## Windows v0.2.1 — Advanced BG Eraser and developer branding
+
+Developed by **Joshua Apal Pudi**. The app displays this credit in its sidebar and author metadata. The white **D** on a refined green tile is shared by the executable, window and sidebar, with icon sizes from 16 to 256 pixels.
+
+### Refine an individual photo or signature
+
+1. Open **Records**, select a record or start a new one, then choose a photo/signature.
+2. Click **Advanced BG Eraser • photo** or **Advanced BG Eraser • signature**.
+3. Adjust **Removal strength** and **Edge feather**, then click **Auto remove background**.
+4. Use **Erase brush** to remove leftovers or **Restore brush** to recover detail. Adjust brush radius and softness. Undo/Redo work per brush stroke; Reset returns to the imported original.
+5. Use **Fit image**, zoom buttons, or **Ctrl+mouse wheel** to inspect edges. **Show original** lets you compare without changing the edited mask.
+6. Choose white output or uncheck it for transparent PNG. Click **Apply image**, then **Save Record**.
+
+New imports retain their original source separately, so reopening the eraser starts from that original. Old records without retained originals use the existing image; re-import the source if detail was already removed. Cancel leaves the current record image unchanged. Photos default to white and signatures default to transparent. Original source files are never overwritten.
+
+Layout Studio also exposes **Advanced BG Eraser • brush / restore** inside its crop/image dialog. This produces a static image for the shared layout; use Records for individual portraits. Cropping remains separate from brush coordinates.
+
+The eraser uses adaptive border-color removal and manual mask refinement, entirely offline. It does not include an AI segmentation model; complex scenes need manual brushing. Inputs are limited to 16 megapixels, and undo history is capped according to image size. Updated smoke tests cover brush isolation, undo/redo, original transparency, PNG alpha output and editor initialization, in addition to existing Studio/PDF checks.
+
 Windows desktop port of the Barangay Sibulan **DIKERMA / Barangay ID Maker**.
 
 Android reference baseline: `Brgysibulan/dikerma` **v0.7.1** at commit `889ca191dadb131a56c10deadd3e6d5d65c2b7c7`.
@@ -97,7 +116,7 @@ Existing version-1 layout files remain supported. Custom elements, groups, crop 
 
 The Windows workflow is configured to compile the application, run smoke tests for window initialization, legacy/custom layout persistence, edge-connected cleanup, cropped-image pixels, all element render types and a two-person PDF export, then publish the self-contained app. Interactive drag/resize, font selection and physical print alignment still need a Windows user check.
 
-The implementation workspace has no .NET SDK. The new Windows build and smoke tests have not yet run; pushing the branch requires authorization. Local XML/event-handler and whitespace checks are used as preliminary checks only.
+Windows v0.2.1 passed compilation, offline checks, Studio/eraser smoke tests and package publishing in [Build Windows App run #22](https://github.com/Brgysibulan/DIKERAPPWINDOWS/actions/runs/34014783734). The artifact is `DIKERMA-Windows-x64-v0.2.1-UNSIGNED`. Interactive brush feel and physical print alignment still require a Windows user check.
 
 ### How to group elements
 

@@ -9,6 +9,34 @@ public sealed class OfflineImageProcessor
 
     public OfflineImageProcessor(AssetService assets) => _assets = assets;
 
+    public string CleanBackground(string inputPath, bool white, double tolerance, double feather)
+    {
+        var session = CreateEraserSession(inputPath);
+        session.ReplaceMask(CreateMask(session, tolerance, feather));
+        return SaveEraser(session, white);
+    }
+
+    public EraserSession CreateEraserSession(string path)
+    {
+        var bitmap = LoadBgra32(path);
+        if ((long)bitmap.PixelWidth * bitmap.PixelHeight > 16_000_000)
+            throw new InvalidOperationException("Please resize this image to 16 megapixels or less before editing.");
+        var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
+        bitmap.CopyPixels(pixels, bitmap.PixelWidth * 4, 0);
+        return new EraserSession(pixels, bitmap.PixelWidth, bitmap.PixelHeight);
+    }
+
+    public byte[] CreateMask(EraserSession session, double tolerance, double feather) =>
+        BuildAdaptiveBackgroundMatte(session.OriginalPixels, session.Width, session.Height,
+            session.Width * 4, strength: tolerance / 75.0, featherRadius: (int)Math.Round(feather));
+
+    public string SaveEraser(EraserSession session, bool white)
+    {
+        var output = _assets.CreateOutputPath("eraser", ".png");
+        SavePng(session.Composite(white), session.Width, session.Height, session.Width * 4, 96, 96, output);
+        return output;
+    }
+
     public string CleanPhotoToWhite(string inputPath)
     {
         var bitmap = LoadBgra32(inputPath);
@@ -26,7 +54,7 @@ public sealed class OfflineImageProcessor
             {
                 var pixelIndex = y * width + x;
                 var i = y * stride + x * 4;
-                var keep = matte[pixelIndex] / 255.0;
+                var keep = matte[pixelIndex] / 255.0 * pixels[i + 3] / 255.0;
 
                 // Composite the retained foreground over clean white. The adaptive matte
                 // keeps hair/clothing edges while removing only edge-connected background.
@@ -59,7 +87,7 @@ public sealed class OfflineImageProcessor
             {
                 var pixelIndex = y * width + x;
                 var i = y * stride + x * 4;
-                pixels[i + 3] = matte[pixelIndex];
+                pixels[i + 3] = (byte)(pixels[i + 3] * matte[pixelIndex] / 255);
             }
         }
 
@@ -102,7 +130,9 @@ public sealed class OfflineImageProcessor
         int width,
         int height,
         int stride,
-        bool signatureMode = false)
+        bool signatureMode = false,
+        double strength = 1,
+        int featherRadius = 3)
     {
         if (width <= 0 || height <= 0)
             return Array.Empty<byte>();
@@ -115,6 +145,10 @@ public sealed class OfflineImageProcessor
             ? Math.Clamp(strongThreshold + 58.0, 80.0, 165.0)
             : Math.Clamp(strongThreshold + 44.0, 62.0, 138.0);
         var localStepThreshold = signatureMode ? 82.0 : 70.0;
+        strength = Math.Clamp(strength, 0.25, 2);
+        strongThreshold *= strength;
+        weakThreshold *= strength;
+        localStepThreshold *= strength;
 
         var count = width * height;
         var background = new bool[count];
@@ -180,7 +214,7 @@ public sealed class OfflineImageProcessor
 
         // Feather only the immediate foreground boundary. Interior pixels remain fully
         // opaque so faces, text on shirts, and other details do not become washed out.
-        var radius = signatureMode ? 2 : 3;
+        var radius = signatureMode ? 2 : Math.Clamp(featherRadius, 0, 5);
         var feathered = (byte[])matte.Clone();
         for (var y = 0; y < height; y++)
         {

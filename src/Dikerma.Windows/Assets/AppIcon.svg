@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect width="256" height="256" rx="48" fill="#00854A"/><path fill="white" fill-rule="evenodd" d="M65 48H118C169 48 197 76 197 128S169 208 118 208H65ZM99 79V177H117C147 177 162 161 162 128S147 79 117 79Z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs><linearGradient id="green" x2="0.8" y2="1"><stop stop-color="#159759"/><stop offset="1" stop-color="#075A34"/></linearGradient></defs>
+  <rect x="4" y="4" width="248" height="248" rx="52" fill="url(#green)"/>
+  <rect x="10" y="10" width="236" height="236" rx="46" fill="none" stroke="#FFFFFF" stroke-opacity=".16" stroke-width="2"/>
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M66 50H117C169 50 195 78 195 128S169 206 117 206H66ZM100 81V175H116C145 175 160 160 160 128S145 81 116 81Z"/>
+</svg>

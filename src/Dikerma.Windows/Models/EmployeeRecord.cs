@@ -11,6 +11,8 @@ public sealed class EmployeeRecord
     public string Sex { get; set; } = string.Empty;
     public string CivilStatus { get; set; } = string.Empty;
     public string? PhotoPath { get; set; }
+    public string? OriginalPhotoPath { get; set; }
+    public string? OriginalSignaturePath { get; set; }
     public string? SignaturePath { get; set; }
     public string? QrImagePath { get; set; }
     public string Status { get; set; } = "Active";
