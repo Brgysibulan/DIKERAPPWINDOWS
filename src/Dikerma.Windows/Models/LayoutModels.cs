@@ -12,6 +12,7 @@ public sealed class ElementPlacement
     public string? ImagePath { get; set; }
     public string? GroupId { get; set; }
     public int ZIndex { get; set; }
+    public bool Locked { get; set; }
     public bool Italic { get; set; }
     public double CropLeft { get; set; }
     public double CropTop { get; set; }
@@ -27,6 +28,15 @@ public sealed class ElementPlacement
     public bool Bold { get; set; }
     public IdTextAlignment Alignment { get; set; } = IdTextAlignment.Left;
     public string TextColor { get; set; } = "#000000";
+
+    // Publisher-style appearance shared by images and shapes.
+    public string FillColor { get; set; } = "#FFFFFF";
+    public bool BorderEnabled { get; set; }
+    public string BorderColor { get; set; } = "#000000";
+    public double BorderThicknessPt { get; set; } = 0.6;
+    public double CornerRadiusMm { get; set; }
+    public double Opacity { get; set; } = 1;
+
     public bool UnderlineEnabled { get; set; }
     public string UnderlineColor { get; set; } = "#000000";
     public double UnderlineThicknessPt { get; set; } = 0.45;
@@ -56,6 +66,9 @@ public sealed class ElementPlacement
         CropTop = Math.Clamp(CropTop, 0, 0.95);
         CropBottom = Math.Clamp(CropBottom, 0, 0.95 - CropTop);
         StrokeWidthPt = Math.Clamp(StrokeWidthPt, 0.2, 12);
+        BorderThicknessPt = Math.Clamp(BorderThicknessPt, 0.1, 8);
+        CornerRadiusMm = Math.Clamp(CornerRadiusMm, 0, Math.Min(WidthMm, HeightMm) / 2);
+        Opacity = Math.Clamp(Opacity, 0, 1);
         FontSizePt = Math.Clamp(FontSizePt, 3.5, 36);
         UnderlineThicknessPt = Math.Clamp(UnderlineThicknessPt, 0.15, 2);
         UnderlineOffsetMm = Math.Clamp(UnderlineOffsetMm, 0, 3);
@@ -84,7 +97,7 @@ public sealed record LayoutElementDefinition(
 
 public sealed class LayoutProfile
 {
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 3;
     public List<LayoutElementDefinition> CustomElements { get; set; } = new();
     public IEnumerable<LayoutElementDefinition> ForSide(IdLayoutSide side) =>
         LayoutCatalog.ForSide(side).Concat(CustomElements.Where(e => e.Side == side)).OrderBy(e => Get(e.Key).ZIndex);
