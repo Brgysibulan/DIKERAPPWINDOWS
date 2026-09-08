@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Threading;
 using Dikerma.Windows.Models;
 
@@ -31,13 +30,15 @@ public partial class MainWindow
                 PreviewEmployeeComboBox.SelectedItem = employee;
             }
         };
-        LayoutSideComboBox.SelectionChanged += (_, _) => Dispatcher.BeginInvoke(RenderPublisherPreview, DispatcherPriority.Background);
-        LayoutCanvas.PreviewMouseLeftButtonUp += (_, _) => Dispatcher.BeginInvoke(() =>
-        {
-            SyncPublisherLayerFromCanvas();
-            LoadPublisherProperties();
-            RenderPublisherPreview();
-        }, DispatcherPriority.Background);
+        LayoutSideComboBox.SelectionChanged += (_, _) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(RenderPublisherPreview));
+        LayoutCanvas.PreviewMouseLeftButtonUp += (_, _) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            {
+                SyncPublisherLayerFromCanvas();
+                LoadPublisherProperties();
+                RenderPublisherPreview();
+            }));
 
         LoadPublisherProperties();
         RenderPublisherPreview();
